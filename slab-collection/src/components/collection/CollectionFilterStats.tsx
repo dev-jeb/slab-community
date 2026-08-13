@@ -1,3 +1,4 @@
+import { SkateLoader } from "@/components/collection/SkateLoader";
 import type { CollectionCategoryFilter } from "@/lib/collection-filters";
 import type { DashboardStats } from "@/lib/slab/types";
 
@@ -23,7 +24,7 @@ interface CollectionFilterStatsProps {
 interface StatItem {
   id: CollectionCategoryFilter;
   label: string;
-  /** undefined when the count isn't known — the chip still navigates, it just doesn't claim a number. */
+  /** undefined = still loading. The chip stays clickable; it just doesn't claim a number yet. */
   value: number | undefined;
   hint?: string;
 }
@@ -34,17 +35,17 @@ function buildStatItems(
   duplicateCount?: number,
 ): StatItem[] {
   return [
-    { id: "auto", label: "Autos", value: stats?.autos ?? 0 },
-    { id: "rookie", label: "Rookies", value: stats?.rookies ?? 0 },
+    { id: "auto", label: "Autos", value: stats?.autos },
+    { id: "rookie", label: "Rookies", value: stats?.rookies },
     {
       id: "numbered",
       label: "Numbered",
-      value: stats?.numbered ?? 0,
+      value: stats?.numbered,
     },
     {
       id: "teams",
       label: "Teams",
-      value: stats?.teams ?? 0,
+      value: stats?.teams,
     },
     {
       id: "by_set",
@@ -120,7 +121,12 @@ export function CollectionFilterStats({
                 {item.label}
               </p>
               <p className="mt-1 text-2xl font-semibold text-white">
-                {item.value ?? <span className="text-slate-600">—</span>}
+                {item.value ?? (
+                  <SkateLoader
+                    label={`Counting ${item.label.toLowerCase()}`}
+                    className="text-lg"
+                  />
+                )}
               </p>
               {item.hint ? (
                 <p className="mt-1 text-xs text-slate-500">{item.hint}</p>

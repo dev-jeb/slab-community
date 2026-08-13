@@ -1,5 +1,6 @@
 "use client";
 
+import { SkateLoader } from "@/components/collection/SkateLoader";
 import type { CollectionCategoryFilter } from "@/lib/collection-filters";
 import type { CollectionSortOption } from "@/lib/collection-sort";
 import type { DashboardStats } from "@/lib/slab/types";
@@ -23,8 +24,8 @@ interface CollectionFilterSheetProps {
 const FILTER_OPTIONS: {
   id: CollectionCategoryFilter;
   label: string;
-  // undefined = count unknown (see CollectionView: set and duplicate counts need the whole
-  // collection loaded), in which case the row renders without a number rather than showing 0.
+  // undefined = not known yet, which renders as the loading animation. It must NOT fall back to
+  // 0: a confident "Autos 0" on a collection full of autos is worse than admitting we're loading.
   value: (props: {
     stats: DashboardStats | null;
     setCount?: number;
@@ -32,10 +33,10 @@ const FILTER_OPTIONS: {
   }) => number | undefined;
 }[] = [
   { id: "all", label: "All cards", value: () => 0 },
-  { id: "auto", label: "Autos", value: ({ stats }) => stats?.autos ?? 0 },
-  { id: "rookie", label: "Rookies", value: ({ stats }) => stats?.rookies ?? 0 },
-  { id: "numbered", label: "Numbered", value: ({ stats }) => stats?.numbered ?? 0 },
-  { id: "teams", label: "Teams", value: ({ stats }) => stats?.teams ?? 0 },
+  { id: "auto", label: "Autos", value: ({ stats }) => stats?.autos },
+  { id: "rookie", label: "Rookies", value: ({ stats }) => stats?.rookies },
+  { id: "numbered", label: "Numbered", value: ({ stats }) => stats?.numbered },
+  { id: "teams", label: "Teams", value: ({ stats }) => stats?.teams },
   { id: "by_set", label: "Sets", value: ({ setCount }) => setCount },
   {
     id: "duplicates",
@@ -145,6 +146,10 @@ export function CollectionFilterSheet({
                     <p className="text-sm text-white">{option.label}</p>
                     {count !== undefined ? (
                       <p className="mt-1 text-xs text-slate-500">{count}</p>
+                    ) : option.id !== "all" ? (
+                      <p className="mt-1 text-xs">
+                        <SkateLoader label={`Counting ${option.label.toLowerCase()}`} />
+                      </p>
                     ) : null}
                   </button>
                 );
