@@ -3,20 +3,39 @@ import {
   type CollectionCategoryFilter,
 } from "@/lib/collection-filters";
 import type { CollectionSortOption } from "@/lib/collection-sort";
+import type { GroupSort } from "@/lib/slab/types";
+
+/**
+ * Teams can also be ordered by distinct players, which no other grouped view has and the shared
+ * `group_sort` therefore doesn't carry. It's resolved in the teams view over the groups the
+ * server returned — see CollectionTeamGroups for when that stops being exact.
+ */
+export const TEAM_PLAYERS_SORT = "players_desc";
+
+export type GroupSortOption = GroupSort | typeof TEAM_PLAYERS_SORT;
 
 /** Rows per request when the API is doing the paging. */
 export const COLLECTION_PAGE_SIZE = 48;
 
 /**
- * Views that aggregate over the entire collection — they group every copy by team, by set, or by
- * card to find duplicates, so a page of results can't answer them. The API has no `set` facet and
- * no duplicates aggregate yet, so these still pull everything.
+ * Views that aggregate over the whole collection rather than listing copies. They used to force a
+ * full-collection load so the browser could group it; the API now rolls them up and pages the
+ * GROUPS, so each maps to its own endpoint instead.
  */
-const GROUPED_CATEGORIES: CollectionCategoryFilter[] = [
-  "teams",
-  "by_set",
-  "duplicates",
-];
+const GROUP_ENDPOINTS: Partial<Record<CollectionCategoryFilter, CollectionGroupKind>> = {
+  by_set: "sets",
+  duplicates: "duplicates",
+  teams: "teams",
+};
+
+export type CollectionGroupKind = "sets" | "duplicates" | "teams";
+
+/** The grouped endpoint backing a category, or null when the category lists copies. */
+export function groupKindFor(
+  category: CollectionCategoryFilter,
+): CollectionGroupKind | null {
+  return GROUP_ENDPOINTS[category] ?? null;
+}
 
 /**
  * Sort options mapped to the API's sort grammar, or null where the API has no equivalent:
@@ -36,12 +55,18 @@ export function serverSortKey(sort: CollectionSortOption): string | null {
   return SERVER_SORT[sort];
 }
 
-/** True when the API can both filter and order this view, so the browser only needs one page. */
+/**
+ * True when the API can both filter and order this view, so the browser only needs one page.
+ *
+ * False means the browser still has to do the ordering, which is only correct over a fully-loaded
+ * collection — the two sorts the API can't express. Grouped categories are neither: they have
+ * their own endpoints (see `groupKindFor`) and never take this path.
+ */
 export function usesServerPaging(
   category: CollectionCategoryFilter,
   sort: CollectionSortOption,
 ): boolean {
-  if (GROUPED_CATEGORIES.includes(category)) return false;
+  if (groupKindFor(category)) return false;
   return SERVER_SORT[sort] !== null;
 }
 

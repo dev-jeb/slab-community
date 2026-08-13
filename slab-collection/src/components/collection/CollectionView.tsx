@@ -13,7 +13,6 @@ import { SetupPrompt } from "@/components/collection/SetupPrompt";
 import { SummaryBar } from "@/components/collection/SummaryBar";
 import { formatApiDetail } from "@/lib/api-errors";
 import {
-  countDuplicateCards,
   filterByCategory,
   ownedCountByCardUuid,
   type CollectionCategoryFilter,
@@ -21,7 +20,10 @@ import {
 import {
   collectionFetchKey,
   collectionParams,
+  groupKindFor,
+  TEAM_PLAYERS_SORT,
   usesServerPaging,
+  type GroupSortOption,
 } from "@/lib/collection-paging";
 import { primarySubjectName } from "@/lib/names";
 import { prefetchPlayerImages } from "@/lib/player-image-cache";
@@ -29,7 +31,14 @@ import {
   sortCollectionCopies,
   type CollectionSortOption,
 } from "@/lib/collection-sort";
-import type { CollectionResult, DashboardStats } from "@/lib/slab/types";
+import type {
+  CollectionResult,
+  DuplicateGroupOut,
+  GroupResult,
+  SetGroupOut,
+  TeamGroupOut,
+} from "@/lib/slab/types";
+import type { DashboardStats } from "@/lib/slab/types";
 
 type ViewMode = "grid" | "list";
 
@@ -59,6 +68,8 @@ export function CollectionView() {
   const [category, setCategory] = useState<CollectionCategoryFilter>("all");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [result, setResult] = useState<CollectionResult | null>(null);
+  const [groups, setGroups] = useState<GroupResult<unknown> | null>(null);
+  const [groupSort, setGroupSort] = useState<GroupSortOption>("-value");
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [needsSetup, setNeedsSetup] = useState(false);
@@ -71,10 +82,15 @@ export function CollectionView() {
     }
   }, []);
 
-  // Paged views ask the API for one page and let it do the filtering and ordering; grouped views
-  // and the two browser-only sorts still need every copy (see collection-paging).
+  // Three shapes of request, decided by the category and sort (see collection-paging):
+  //   grouped   -> its own endpoint, which rolls up and pages the GROUPS
+  //   paged     -> one page of copies, filtered and ordered by the API
+  //   full load -> everything, for the two sorts the API can't express
+  const groupKind = groupKindFor(category);
   const paged = usesServerPaging(category, sort);
-  const fetchKey = collectionFetchKey(category, sort, submittedQuery);
+  const fetchKey = groupKind
+    ? `group|${groupKind}|${groupSort}|${submittedQuery}`
+    : collectionFetchKey(category, sort, submittedQuery);
 
   const fetchPage = useCallback(
     async (offset: number | null): Promise<CollectionResult | null> => {
@@ -104,13 +120,50 @@ export function CollectionView() {
     [category, sort, submittedQuery],
   );
 
+  const fetchGroups = useCallback(async (): Promise<GroupResult<unknown> | null> => {
+    if (!groupKind) return null;
+
+    const response = await fetch(`/api/collection/groups/${groupKind}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        q: submittedQuery || undefined,
+        // "Most players" is ordered in the teams view itself; the server has no such key, so ask
+        // for the nearest thing and let that view refine it.
+        group_sort: groupSort === TEAM_PLAYERS_SORT ? "-copies" : groupSort,
+        include_copies: true,
+      }),
+    });
+
+    if (response.status === 503) {
+      setNeedsSetup(true);
+      return null;
+    }
+
+    if (!response.ok) {
+      const body = (await response.json()) as { detail?: unknown };
+      setError(formatApiDetail(body.detail, "Failed to load groups"));
+      return null;
+    }
+
+    setNeedsSetup(false);
+    return (await response.json()) as GroupResult<unknown>;
+  }, [groupKind, groupSort, submittedQuery]);
+
   const loadCollection = useCallback(() => {
     startTransition(async () => {
       setError(null);
+
+      if (groupKind) {
+        const data = await fetchGroups();
+        if (data) setGroups(data);
+        return;
+      }
+
       const data = await fetchPage(paged ? 0 : null);
       if (data) setResult(data);
     });
-  }, [fetchPage, paged]);
+  }, [fetchGroups, fetchPage, groupKind, paged]);
 
   const loadMore = useCallback(() => {
     if (!paged || !result) return;
@@ -176,34 +229,23 @@ export function CollectionView() {
   const loadedCount = result?.items?.length ?? 0;
   const hasMore = paged && loadedCount < (result?.total ?? 0);
 
-  // Both counts are derived from the loaded rows, so they're only true over a full load. When
-  // paging they're left undefined rather than reported off a single page — the API has no set
-  // facet or duplicates aggregate to ask instead.
-  const uniqueSetCount = useMemo(() => {
-    if (paged) return undefined;
-    return new Set(
-      (result?.items ?? [])
-        .map((copy) => copy.card?.set_name?.trim())
-        .filter(Boolean),
-    ).size;
-  }, [result?.items, paged]);
-
-  const duplicateCount = useMemo(
-    () => (paged ? undefined : countDuplicateCards(result?.items ?? [])),
-    [result?.items, paged],
-  );
+  // Whole-collection counts, so they're right no matter how little of it is loaded. These used to
+  // be derived from the rows on hand, which meant they were either absent while paging or, worse,
+  // computed off a single page.
+  const uniqueSetCount = stats?.sets;
+  const duplicateCount = stats?.duplicates;
 
   const ownedTotals = useMemo(
     () => ownedCountByCardUuid(result?.items ?? []),
     [result?.items],
   );
 
-  const displayTotal =
-    category === "duplicates"
-      ? (duplicateCount ?? 0)
-      : paged || category === "all"
-        ? (result?.total ?? 0)
-        : items.length;
+  // For a grouped view this is the number of groups, which is what those views label.
+  const displayTotal = groupKind
+    ? (groups?.total ?? 0)
+    : paged || category === "all"
+      ? (result?.total ?? 0)
+      : items.length;
 
   const highlightCardNumber =
     sort === "card_number_asc" || sort === "card_number_desc";
@@ -332,9 +374,9 @@ export function CollectionView() {
         </div>
       ) : null}
 
-      {result ? (
+      {result || groups ? (
         <>
-          <SummaryBar summary={result.summary} total={displayTotal} />
+          <SummaryBar summary={result?.summary} total={displayTotal} />
 
           <div className="hidden md:block">
             <CollectionFilterStats
@@ -347,12 +389,24 @@ export function CollectionView() {
             />
           </div>
 
-          {category === "teams" ? (
-            <CollectionTeamGroups items={items} />
-          ) : category === "by_set" ? (
-            <CollectionSetBanners items={items} />
-          ) : category === "duplicates" ? (
-            <CollectionDuplicateGroups items={result?.items ?? []} />
+          {groupKind === "teams" ? (
+            <CollectionTeamGroups
+              groups={(groups?.items ?? []) as TeamGroupOut[]}
+              sort={groupSort}
+              onSortChange={setGroupSort}
+            />
+          ) : groupKind === "sets" ? (
+            <CollectionSetBanners
+              groups={(groups?.items ?? []) as SetGroupOut[]}
+              sort={groupSort}
+              onSortChange={setGroupSort}
+            />
+          ) : groupKind === "duplicates" ? (
+            <CollectionDuplicateGroups
+              groups={(groups?.items ?? []) as DuplicateGroupOut[]}
+              sort={groupSort}
+              onSortChange={setGroupSort}
+            />
           ) : items.length > 0 ? (
             view === "grid" ? (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -389,7 +443,7 @@ export function CollectionView() {
           {hasMore ? (
             <div className="flex flex-col items-center gap-2 pt-2">
               <p className="text-xs text-slate-500">
-                Showing {loadedCount} of {result.total}
+                Showing {loadedCount} of {result?.total ?? 0}
               </p>
               <button
                 type="button"

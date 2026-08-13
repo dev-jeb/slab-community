@@ -12,6 +12,8 @@ import type {
   CollectionResult,
   CollectionSearchQuery,
   CommunityBoard,
+  GroupResult,
+  GroupSort,
   CustomSetCardAdd,
   CustomSetCardOut,
   CustomSetCreate,
@@ -130,6 +132,42 @@ export async function searchCollection(
       method: "POST",
       body: JSON.stringify({
         limit: 48,
+        offset: 0,
+        ...query,
+      }),
+    },
+  );
+}
+
+export type CollectionGroupKind = "sets" | "duplicates" | "teams";
+
+export interface CollectionGroupQuery extends CollectionSearchQuery {
+  group_sort?: GroupSort;
+  include_copies?: boolean;
+}
+
+/** Grouped views page over GROUPS, so this is a count of sets/cards/teams, not copies. */
+const GROUP_PAGE_SIZE = 100;
+
+/**
+ * The collection rolled up by set, by card (duplicates), or by team.
+ *
+ * These replace grouping in the browser, which needed every copy loaded first. The API pages the
+ * GROUPS, so a set's copies never straddle a page boundary. `include_copies: false` returns
+ * headers only — use it when the UI reveals a group's cards on expand.
+ */
+export async function listCollectionGroups<T>(
+  kind: CollectionGroupKind,
+  query: CollectionGroupQuery = {},
+): Promise<GroupResult<T>> {
+  const collectorUuid = await getCollectorUuid();
+
+  return slabFetch<GroupResult<T>>(
+    `/collectors/${collectorUuid}/collection/${kind}`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        limit: GROUP_PAGE_SIZE,
         offset: 0,
         ...query,
       }),

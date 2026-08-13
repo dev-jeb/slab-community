@@ -1,25 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
+import { GroupSortSelect } from "@/components/collection/GroupSortSelect";
 import { OwnedCopyRow } from "@/components/collection/OwnedCopyRow";
 import { PlayerAvatar, primarySubjectName } from "@/components/collection/PlayerAvatar";
-import {
-  duplicateGroupsOnly,
-  groupByCardUuid,
-  sortDuplicateGroups,
-  type DuplicateGroupSort,
-} from "@/lib/collection-filters";
 import { cardSubtitle, cardTitle, formatCurrency } from "@/lib/slab/format";
-import type { CardCopyOut } from "@/lib/slab/types";
+import type { GroupSortOption } from "@/lib/collection-paging";
+import type { DuplicateGroupOut } from "@/lib/slab/types";
 
 interface CollectionDuplicateGroupsProps {
-  items: CardCopyOut[];
+  /** Cards held more than once, as the API grouped them. */
+  groups: DuplicateGroupOut[];
+  sort: GroupSortOption;
+  onSortChange: (sort: GroupSortOption) => void;
 }
 
 interface DuplicateBannerProps {
-  group: ReturnType<typeof sortDuplicateGroups>[number];
+  group: DuplicateGroupOut;
   expanded: boolean;
   onToggle: () => void;
 }
@@ -55,12 +54,13 @@ function DuplicateBanner({ group, expanded, onToggle }: DuplicateBannerProps) {
       <div className="flex shrink-0 flex-wrap items-center justify-end gap-x-5 gap-y-1 text-sm">
         <div className="text-right">
           <p className="text-[10px] uppercase tracking-wider text-slate-500">Copies</p>
-          <p className="font-semibold text-emerald-300">×{group.totalCount}</p>
+          <p className="font-semibold text-emerald-300">×{group.copy_count}</p>
         </div>
         <div className="text-right">
           <p className="text-[10px] uppercase tracking-wider text-slate-500">Value</p>
           <p className="font-semibold text-white">
-            {formatCurrency(String(group.totalValue))}
+            {/* null = none of these copies are priced. Unknown, not zero. */}
+            {group.total_value == null ? "—" : formatCurrency(group.total_value)}
           </p>
         </div>
         <span className="text-xs text-sky-400">{expanded ? "Hide" : "Show"}</span>
@@ -69,18 +69,18 @@ function DuplicateBanner({ group, expanded, onToggle }: DuplicateBannerProps) {
   );
 }
 
-export function CollectionDuplicateGroups({ items }: CollectionDuplicateGroupsProps) {
-  const [groupSort, setGroupSort] = useState<DuplicateGroupSort>("copies_desc");
+export function CollectionDuplicateGroups({
+  groups,
+  sort,
+  onSortChange,
+}: CollectionDuplicateGroupsProps) {
   const [expandedUuid, setExpandedUuid] = useState<string | null>(null);
 
-  const groups = useMemo(() => {
-    const duplicates = duplicateGroupsOnly(groupByCardUuid(items));
-    return sortDuplicateGroups(duplicates, groupSort);
-  }, [items, groupSort]);
-
+  // Reordering puts different cards in the same positions; a stale expansion would open one the
+  // user didn't click.
   useEffect(() => {
     setExpandedUuid(null);
-  }, [groupSort]);
+  }, [sort]);
 
   if (groups.length === 0) {
     return (
@@ -96,34 +96,21 @@ export function CollectionDuplicateGroups({ items }: CollectionDuplicateGroupsPr
         <p className="text-sm text-slate-400">
           {groups.length} card{groups.length === 1 ? "" : "s"} with multiple copies
         </p>
-        <label className="flex items-center gap-2 text-sm text-slate-400">
-          <span>Sort</span>
-          <select
-            value={groupSort}
-            onChange={(event) =>
-              setGroupSort(event.target.value as DuplicateGroupSort)
-            }
-            className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-white"
-          >
-            <option value="copies_desc">Most copies</option>
-            <option value="value_desc">Highest value</option>
-            <option value="alpha">Last name (A–Z)</option>
-          </select>
-        </label>
+        <GroupSortSelect label="Sort" value={sort} onChange={onSortChange} />
       </div>
 
       <div className="space-y-3">
         {groups.map((group) => {
-          const expanded = expandedUuid === group.cardUuid;
+          const expanded = expandedUuid === group.card.uuid;
 
           return (
-            <section key={group.cardUuid} className="space-y-3">
+            <section key={group.card.uuid} className="space-y-3">
               <DuplicateBanner
                 group={group}
                 expanded={expanded}
                 onToggle={() =>
                   setExpandedUuid((current) =>
-                    current === group.cardUuid ? null : group.cardUuid,
+                    current === group.card.uuid ? null : group.card.uuid,
                   )
                 }
               />
@@ -131,12 +118,12 @@ export function CollectionDuplicateGroups({ items }: CollectionDuplicateGroupsPr
               {expanded ? (
                 <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/40 p-4">
                   <Link
-                    href={`/cards/${group.cardUuid}`}
+                    href={`/cards/${group.card.uuid}`}
                     className="inline-flex text-sm text-sky-400 transition hover:text-sky-300"
                   >
                     View card details →
                   </Link>
-                  {group.copies.map((copy) => (
+                  {(group.copies ?? []).map((copy) => (
                     <OwnedCopyRow key={copy.uuid} copy={copy} />
                   ))}
                 </div>

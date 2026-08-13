@@ -1,18 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { CardListRow } from "@/components/collection/CardListRow";
-import {
-  groupBySet,
-  sortSetGroups,
-  type SetGroupSort,
-} from "@/lib/collection-filters";
+import { GroupSortSelect } from "@/components/collection/GroupSortSelect";
 import { formatCurrency } from "@/lib/slab/format";
-import type { CardCopyOut } from "@/lib/slab/types";
+import type { GroupSortOption } from "@/lib/collection-paging";
+import type { SetGroupOut } from "@/lib/slab/types";
 
 interface CollectionSetBannersProps {
-  items: CardCopyOut[];
+  /** Groups as the API rolled them up — already filtered, aggregated, and ordered. */
+  groups: SetGroupOut[];
+  sort: GroupSortOption;
+  onSortChange: (sort: GroupSortOption) => void;
 }
 
 function setSubtitle(group: {
@@ -29,7 +29,7 @@ interface SetBannerProps {
   setName: string;
   subtitle: string;
   cardCount: number;
-  totalValue: number;
+  totalValue?: string | null;
   expanded: boolean;
   onToggle: () => void;
 }
@@ -67,7 +67,8 @@ function SetBanner({
         <div className="text-right">
           <p className="text-[10px] uppercase tracking-wider text-slate-500">Value</p>
           <p className="font-semibold text-white">
-            {formatCurrency(String(totalValue))}
+            {/* null = nothing in this set is priced. Unknown, not zero. */}
+            {totalValue == null ? "—" : formatCurrency(totalValue)}
           </p>
         </div>
         <span className="text-xs text-sky-400">{expanded ? "Hide" : "Show"}</span>
@@ -76,18 +77,18 @@ function SetBanner({
   );
 }
 
-export function CollectionSetBanners({ items }: CollectionSetBannersProps) {
-  const [setSort, setSetSort] = useState<SetGroupSort>("cards_desc");
+export function CollectionSetBanners({
+  groups,
+  sort,
+  onSortChange,
+}: CollectionSetBannersProps) {
   const [expandedSet, setExpandedSet] = useState<string | null>(null);
 
-  const groups = useMemo(
-    () => sortSetGroups(groupBySet(items), setSort),
-    [items, setSort],
-  );
-
+  // A new ordering renders different sets in the same positions, so a leftover expansion would
+  // open a set the user didn't click.
   useEffect(() => {
     setExpandedSet(null);
-  }, [setSort]);
+  }, [sort]);
 
   if (groups.length === 0) {
     return (
@@ -103,43 +104,31 @@ export function CollectionSetBanners({ items }: CollectionSetBannersProps) {
         <p className="text-sm text-slate-400">
           {groups.length} set{groups.length === 1 ? "" : "s"} in your collection
         </p>
-        <label className="flex items-center gap-2 text-sm text-slate-400">
-          <span>Sort sets</span>
-          <select
-            value={setSort}
-            onChange={(event) => setSetSort(event.target.value as SetGroupSort)}
-            className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-white"
-          >
-            <option value="cards_desc">Most cards</option>
-            <option value="value_desc">Highest value</option>
-            <option value="alpha">Set name (A–Z)</option>
-          </select>
-        </label>
+        <GroupSortSelect label="Sort sets" value={sort} onChange={onSortChange} />
       </div>
 
       <div className="space-y-3">
         {groups.map((group) => {
-          const expanded = expandedSet === group.setName;
-          const subtitle = setSubtitle(group);
+          const expanded = expandedSet === group.set_uuid;
 
           return (
-            <section key={group.setName} className="space-y-3">
+            <section key={group.set_uuid} className="space-y-3">
               <SetBanner
-                setName={group.setName}
-                subtitle={subtitle}
-                cardCount={group.cardCount}
-                totalValue={group.totalValue}
+                setName={group.name}
+                subtitle={setSubtitle(group)}
+                cardCount={group.card_count}
+                totalValue={group.total_value}
                 expanded={expanded}
                 onToggle={() =>
                   setExpandedSet((current) =>
-                    current === group.setName ? null : group.setName,
+                    current === group.set_uuid ? null : group.set_uuid,
                   )
                 }
               />
 
               {expanded ? (
                 <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/40 p-4">
-                  {group.copies.map((copy) => (
+                  {(group.copies ?? []).map((copy) => (
                     <CardListRow key={copy.uuid} copy={copy} />
                   ))}
                 </div>

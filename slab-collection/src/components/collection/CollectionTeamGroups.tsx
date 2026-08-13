@@ -3,16 +3,23 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 import { CardListRow } from "@/components/collection/CardListRow";
+import { GroupSortSelect } from "@/components/collection/GroupSortSelect";
 import { TeamLogo } from "@/components/collection/TeamLogo";
-import {
-  groupByTeam,
-  sortTeamGroups,
-  type TeamGroupSort,
-} from "@/lib/collection-filters";
-import type { CardCopyOut } from "@/lib/slab/types";
+import { TEAM_PLAYERS_SORT, type GroupSortOption } from "@/lib/collection-paging";
+import type { TeamGroupOut } from "@/lib/slab/types";
 
+/**
+ * "Most players" has no server-side equivalent — `group_sort` is shared by all three grouped
+ * views, and player count only exists for teams. The API returns every team in one page (~32 of
+ * them against a 100-group page), so ordering the received groups here is exact. If a collection
+ * ever spans more teams than one page holds this would sort only that page, at which point it
+ * should become a real `players` sort key on the API.
+ */
 interface CollectionTeamGroupsProps {
-  items: CardCopyOut[];
+  /** Teams as the API grouped them — one entry per team the collection depicts. */
+  groups: TeamGroupOut[];
+  sort: GroupSortOption;
+  onSortChange: (sort: GroupSortOption) => void;
 }
 
 interface TeamTileProps {
@@ -90,19 +97,27 @@ function rowEndIndex(index: number, columns: number, total: number): number {
   return Math.min(Math.floor(index / columns) * columns + columns - 1, total - 1);
 }
 
-export function CollectionTeamGroups({ items }: CollectionTeamGroupsProps) {
-  const [teamSort, setTeamSort] = useState<TeamGroupSort>("players_desc");
-  const groups = useMemo(
-    () => sortTeamGroups(groupByTeam(items), teamSort),
-    [items, teamSort],
-  );
+export function CollectionTeamGroups({
+  groups: serverGroups,
+  sort,
+  onSortChange,
+}: CollectionTeamGroupsProps) {
+  // "Most players" is applied here; every other ordering already arrived that way. See
+  // TEAM_PLAYERS_SORT above for why this one isn't a server sort.
+  const groups = useMemo(() => {
+    if (sort !== TEAM_PLAYERS_SORT) return serverGroups;
+    return [...serverGroups].sort(
+      (a, b) => b.player_count - a.player_count || a.name.localeCompare(b.name),
+    );
+  }, [serverGroups, sort]);
+
   const columns = useTeamGridColumns();
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
   const tileRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const panelRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   const expandedIndex = expandedTeam
-    ? groups.findIndex((group) => group.team === expandedTeam)
+    ? groups.findIndex((group) => group.name === expandedTeam)
     : -1;
 
   function toggleTeam(team: string) {
@@ -122,7 +137,7 @@ export function CollectionTeamGroups({ items }: CollectionTeamGroupsProps) {
 
   useEffect(() => {
     setExpandedTeam(null);
-  }, [teamSort]);
+  }, [sort]);
 
   useEffect(() => {
     if (!expandedTeam) return;
@@ -160,24 +175,17 @@ export function CollectionTeamGroups({ items }: CollectionTeamGroupsProps) {
         <p className="text-sm text-slate-400">
           {groups.length} team{groups.length === 1 ? "" : "s"} in your collection
         </p>
-        <label className="flex items-center gap-2 text-sm text-slate-400">
-          <span>Sort teams</span>
-          <select
-            value={teamSort}
-            onChange={(event) =>
-              setTeamSort(event.target.value as TeamGroupSort)
-            }
-            className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-white"
-          >
-            <option value="players_desc">Most players</option>
-            <option value="cards_desc">Most cards</option>
-            <option value="alpha">Team name (A–Z)</option>
-          </select>
-        </label>
+        <GroupSortSelect
+          label="Sort teams"
+          value={sort}
+          onChange={onSortChange}
+          extraOptions={[{ value: TEAM_PLAYERS_SORT, label: "Most players" }]}
+        />
       </div>
 
       <div className="grid items-start gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-      {groups.map(({ team, copies, playerCount }, index) => {
+      {groups.map((group, index) => {
+        const team = group.name;
         const expanded = expandedTeam === team;
         const showPanelBelowRow =
           expandedGroup && index === expandedRowEnd;
@@ -193,8 +201,8 @@ export function CollectionTeamGroups({ items }: CollectionTeamGroupsProps) {
             >
               <TeamTile
                 team={team}
-                playerCount={playerCount}
-                count={copies.length}
+                playerCount={group.player_count}
+                count={group.copy_count}
                 expanded={expanded}
                 onToggle={() => toggleTeam(team)}
               />
@@ -202,23 +210,23 @@ export function CollectionTeamGroups({ items }: CollectionTeamGroupsProps) {
 
             {showPanelBelowRow ? (
               <div
-                key={`${expandedGroup.team}-panel`}
+                key={`${expandedGroup.name}-panel`}
                 ref={(node) => {
-                  if (node) panelRefs.current.set(expandedGroup.team, node);
-                  else panelRefs.current.delete(expandedGroup.team);
+                  if (node) panelRefs.current.set(expandedGroup.name, node);
+                  else panelRefs.current.delete(expandedGroup.name);
                 }}
                 className="col-span-full space-y-3 rounded-xl border border-slate-800 bg-slate-900/40 p-4"
               >
                 <div className="flex items-center justify-between gap-3 border-b border-slate-800 pb-3">
                   <div>
                     <h3 className="font-semibold text-white">
-                      {expandedGroup.team}
+                      {expandedGroup.name}
                     </h3>
                     <p className="text-sm text-slate-400">
-                      {expandedGroup.playerCount} player
-                      {expandedGroup.playerCount === 1 ? "" : "s"} ·{" "}
-                      {expandedGroup.copies.length} card
-                      {expandedGroup.copies.length === 1 ? "" : "s"}
+                      {expandedGroup.player_count} player
+                      {expandedGroup.player_count === 1 ? "" : "s"} ·{" "}
+                      {expandedGroup.copy_count} card
+                      {expandedGroup.copy_count === 1 ? "" : "s"}
                     </p>
                   </div>
                   <button
@@ -229,9 +237,9 @@ export function CollectionTeamGroups({ items }: CollectionTeamGroupsProps) {
                     Close
                   </button>
                 </div>
-                {expandedGroup.copies.map((copy) => (
+                {(expandedGroup.copies ?? []).map((copy) => (
                   <CardListRow
-                    key={`${expandedGroup.team}-${copy.uuid}`}
+                    key={`${expandedGroup.name}-${copy.uuid}`}
                     copy={copy}
                   />
                 ))}

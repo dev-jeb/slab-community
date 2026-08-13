@@ -95,6 +95,55 @@ export interface CollectionResult {
   summary?: PortfolioSummary | null;
 }
 
+// --- Grouped views -------------------------------------------------------
+// The API rolls the collection up by set, by card, or by team and pages the GROUPS. `total` is the
+// number of groups, not copies, and `total_value` is null when nothing in a group is priced —
+// unpriced is unknown, not zero, so render it as "—" rather than "$0".
+
+/** Group ordering. Prefix with `-` for descending; the API defaults to `-value`. */
+export type GroupSort = "value" | "-value" | "copies" | "-copies" | "name" | "-name";
+
+export interface SetGroupOut {
+  set_uuid: string;
+  /** Pass back as `set_slug` to collection search to page this group's copies. */
+  set_slug: string;
+  name: string;
+  brand?: string | null;
+  season?: string | null;
+  year?: number | null;
+  copy_count: number;
+  card_count: number;
+  total_value?: string | null;
+  copies?: CardCopyOut[];
+}
+
+export interface DuplicateGroupOut {
+  card: CardOut;
+  copy_count: number;
+  total_value?: string | null;
+  copies?: CardCopyOut[];
+}
+
+export interface TeamGroupOut {
+  name: string;
+  copy_count: number;
+  player_count: number;
+  total_value?: string | null;
+  copies?: CardCopyOut[];
+}
+
+export interface GroupResult<T> {
+  /** Number of GROUPS, not copies. */
+  total: number;
+  limit: number;
+  offset: number;
+  items?: T[];
+}
+
+export type SetGroupResult = GroupResult<SetGroupOut>;
+export type DuplicateGroupResult = GroupResult<DuplicateGroupOut>;
+export type TeamGroupResult = GroupResult<TeamGroupOut>;
+
 export interface CollectionSearchQuery {
   q?: string | null;
   subject?: string | null;
@@ -292,6 +341,10 @@ export interface DashboardStats {
   rookies?: number;
   numbered?: number;
   teams?: number;
+  /** Distinct sets represented in the collection. */
+  sets?: number;
+  /** Cards owned more than once, counted per card (quantity counts). */
+  duplicates?: number;
   graded_count?: number;
   raw_count?: number;
 }
