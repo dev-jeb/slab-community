@@ -1,6 +1,6 @@
 {
   "name": "slab-mcp",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "MCP server for the slab trading-card API — lets a local AI agent search the catalog, read pricing, and manage a collection.",
   "license": "MIT",
   "type": "module",
