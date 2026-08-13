@@ -9,8 +9,24 @@ interface CachedPlayerImage {
 type PlayerImageSnapshot = Record<string, CachedPlayerImage>;
 
 const memory = new Map<string, string | null>();
-const inflight = new Map<string, Promise<string | null>>();
 const listeners = new Set<(name: string) => void>();
+
+// Every PlayerAvatar asks for its own image as it mounts, and child effects run before the
+// parent's — so a page of 300 cards fired 300 individual requests before any parent-level
+// prefetch could batch them. Instead of relying on the caller to batch, requests are queued here
+// and flushed together on the next tick, which collapses that page load into a couple of POSTs.
+const BATCH_SIZE = 25;
+
+interface PendingLookup {
+  promise: Promise<string | null>;
+  resolve: (url: string | null) => void;
+}
+
+/** Names asked for but not yet flushed: normalized key -> the name as given. */
+const queued = new Map<string, string>();
+/** Lookups in flight or waiting to flush, so the same name is only ever requested once. */
+const pending = new Map<string, PendingLookup>();
+let flushHandle: ReturnType<typeof setTimeout> | null = null;
 
 function normalizePlayerName(name: string): string {
   return name.trim().toLowerCase();
@@ -48,14 +64,34 @@ function notify(name: string): void {
   }
 }
 
-function persist(name: string, url: string | null): void {
-  const key = normalizePlayerName(name);
-  memory.set(key, url);
+interface ResolvedImage {
+  key: string;
+  name: string;
+  url: string | null;
+}
 
-  const snapshot = loadSnapshot();
-  snapshot[key] = { url, savedAt: new Date().toISOString() };
-  saveSnapshot(snapshot);
-  notify(name);
+// Written as a bulk operation on purpose: persisting one name at a time re-parsed and
+// re-serialized the whole localStorage snapshot per player, which on a full collection is
+// hundreds of parse/stringify round trips over a growing object.
+function persistMany(resolved: ResolvedImage[]): void {
+  if (!resolved.length) return;
+
+  for (const { key, url } of resolved) {
+    memory.set(key, url);
+  }
+
+  if (canUseStorage()) {
+    const snapshot = loadSnapshot();
+    const savedAt = new Date().toISOString();
+    for (const { key, url } of resolved) {
+      snapshot[key] = { url, savedAt };
+    }
+    saveSnapshot(snapshot);
+  }
+
+  for (const { name } of resolved) {
+    notify(name);
+  }
 }
 
 export function subscribePlayerImage(listener: (name: string) => void): () => void {
@@ -79,13 +115,82 @@ export function getCachedPlayerImageUrl(name: string): string | null | undefined
   return entry.url;
 }
 
-async function fetchPlayerImageUrl(name: string): Promise<string | null> {
-  const response = await fetch(
-    `/api/player-image?name=${encodeURIComponent(name)}`,
-  );
-  if (!response.ok) return null;
-  const data = (await response.json()) as { url?: string | null };
-  return data.url ?? null;
+/** Cache the answers and hand each waiting caller its URL. */
+function settle(resolved: ResolvedImage[]): void {
+  persistMany(resolved);
+
+  for (const { key, url } of resolved) {
+    const lookup = pending.get(key);
+    if (!lookup) continue;
+    pending.delete(key);
+    lookup.resolve(url);
+  }
+}
+
+async function fetchOne(name: string): Promise<string | null> {
+  try {
+    const response = await fetch(
+      `/api/player-image?name=${encodeURIComponent(name)}`,
+    );
+    if (!response.ok) return null;
+    const data = (await response.json()) as { url?: string | null };
+    return data.url ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchBatch(chunk: Array<[string, string]>): Promise<void> {
+  const names = chunk.map(([, name]) => name);
+
+  try {
+    const response = await fetch("/api/player-images", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ names }),
+    });
+
+    if (response.ok) {
+      const data = (await response.json()) as {
+        images?: Record<string, string | null>;
+      };
+
+      settle(
+        chunk.map(([key, name]) => ({
+          key,
+          name,
+          url: data.images?.[key] ?? data.images?.[name] ?? null,
+        })),
+      );
+      return;
+    }
+  } catch {
+    // Fall back to individual lookups below.
+  }
+
+  const urls = await Promise.all(names.map(fetchOne));
+  settle(chunk.map(([key, name], index) => ({ key, name, url: urls[index] })));
+}
+
+function flush(): void {
+  flushHandle = null;
+  if (!queued.size) return;
+
+  const batch = [...queued.entries()];
+  queued.clear();
+
+  const chunks: Array<Array<[string, string]>> = [];
+  for (let offset = 0; offset < batch.length; offset += BATCH_SIZE) {
+    chunks.push(batch.slice(offset, offset + BATCH_SIZE));
+  }
+
+  // Chunks go out together — one slow batch shouldn't hold up the rest.
+  void Promise.all(chunks.map(fetchBatch));
+}
+
+function scheduleFlush(): void {
+  if (flushHandle !== null) return;
+  flushHandle = setTimeout(flush, 0);
 }
 
 export async function resolvePlayerImageUrl(name: string): Promise<string | null> {
@@ -96,56 +201,26 @@ export async function resolvePlayerImageUrl(name: string): Promise<string | null
   if (cached !== undefined) return cached;
 
   const key = normalizePlayerName(trimmed);
-  const pending = inflight.get(key);
-  if (pending) return pending;
+  const existing = pending.get(key);
+  if (existing) return existing.promise;
 
-  const promise = fetchPlayerImageUrl(trimmed)
-    .then((url) => {
-      persist(trimmed, url);
-      return url;
-    })
-    .finally(() => {
-      inflight.delete(key);
-    });
+  let resolve!: (url: string | null) => void;
+  const promise = new Promise<string | null>((resolveLookup) => {
+    resolve = resolveLookup;
+  });
 
-  inflight.set(key, promise);
+  pending.set(key, { promise, resolve });
+  queued.set(key, trimmed);
+  scheduleFlush();
+
   return promise;
 }
 
+/**
+ * Warm the cache for a list of names. Batching and de-duplication happen in
+ * `resolvePlayerImageUrl`, so this is now just a convenience wrapper — callers that render a
+ * PlayerAvatar per name get the same batching without calling it at all.
+ */
 export async function prefetchPlayerImages(names: string[]): Promise<void> {
-  const unique = [
-    ...new Set(names.map((name) => name.trim()).filter(Boolean)),
-  ].filter((name) => getCachedPlayerImageUrl(name) === undefined);
-
-  if (!unique.length) return;
-
-  const batchSize = 25;
-  for (let offset = 0; offset < unique.length; offset += batchSize) {
-    const chunk = unique.slice(offset, offset + batchSize);
-
-    try {
-      const response = await fetch("/api/player-images", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ names: chunk }),
-      });
-
-      if (response.ok) {
-        const data = (await response.json()) as {
-          images?: Record<string, string | null>;
-        };
-
-        for (const name of chunk) {
-          const key = normalizePlayerName(name);
-          const url = data.images?.[key] ?? data.images?.[name] ?? null;
-          persist(name, url);
-        }
-        continue;
-      }
-    } catch {
-      // Fall back to individual lookups below.
-    }
-
-    await Promise.all(chunk.map((name) => resolvePlayerImageUrl(name)));
-  }
+  await Promise.all(names.map((name) => resolvePlayerImageUrl(name)));
 }
