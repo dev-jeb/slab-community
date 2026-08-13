@@ -453,8 +453,8 @@ export function ChaseSetWizard({ onCreated }: ChaseSetWizardProps) {
                           Roster chase (recommended)
                         </span>
                         <span className="mt-0.5 block text-xs text-slate-400">
-                          One curated slot per player ({preview.playerCount}{" "}
-                          players), any_printing on each flagship card
+                          One player slot each ({preview.playerCount} players) —
+                          ANY matching card of the player fills it
                         </span>
                       </span>
                     </label>
@@ -490,7 +490,7 @@ export function ChaseSetWizard({ onCreated }: ChaseSetWizardProps) {
                   }
                   detail={
                     mode === "roster"
-                      ? "Adding one slot per player with any_printing match mode."
+                      ? "Adding one player slot per player — any matching card counts."
                       : "Saving filter rules to your chase set."
                   }
                 />

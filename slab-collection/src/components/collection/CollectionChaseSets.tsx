@@ -4,12 +4,16 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, useTransition } from "react";
 
 import { ChaseSetWizard } from "@/components/collection/ChaseSetWizard";
+import { PlayerAvatar } from "@/components/collection/PlayerAvatar";
 import { TeamLogo } from "@/components/collection/TeamLogo";
 import {
   defaultChaseViewMode,
+  entryTeam,
   filterChaseEntries,
   filterPlayerGroups,
   groupChaseEntriesByPlayer,
+  playerSlotNeed,
+  playerSlotQualifiers,
   searchChaseEntries,
   searchPlayerGroups,
   type ChaseEntryFilter,
@@ -113,7 +117,7 @@ function ChaseSetDetailPanel({ setUuid }: { setUuid: string }) {
         ? (ownedPlayers / allGroups.length) * 100
         : 0,
     };
-  }, [detail?.cards]);
+  }, [detail]);
 
   if (isPending && !detail) {
     return (
@@ -166,7 +170,7 @@ function ChaseSetDetailPanel({ setUuid }: { setUuid: string }) {
       ) : null}
 
       {detail.cards.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
           <input
             type="search"
             value={search}
@@ -174,30 +178,26 @@ function ChaseSetDetailPanel({ setUuid }: { setUuid: string }) {
             placeholder="Search players or cards…"
             className="min-w-[12rem] flex-1 rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white"
           />
-          <FilterToggle
-            active={entryFilter === "all"}
-            onClick={() => setEntryFilter("all")}
-            label="All"
+          {/* Two independent axes, so two labeled controls: WHICH entries (ownership) and
+              HOW they're grouped (view). A flat row of five buttons read as one choice. */}
+          <SegmentedControl
+            label="Show"
+            options={[
+              { value: "all", label: "All" },
+              { value: "owned", label: "Owned" },
+              { value: "missing", label: "Missing" },
+            ]}
+            value={entryFilter}
+            onChange={(value) => setEntryFilter(value as ChaseEntryFilter)}
           />
-          <FilterToggle
-            active={entryFilter === "owned"}
-            onClick={() => setEntryFilter("owned")}
-            label="Owned"
-          />
-          <FilterToggle
-            active={entryFilter === "missing"}
-            onClick={() => setEntryFilter("missing")}
-            label="Missing"
-          />
-          <FilterToggle
-            active={viewMode === "player"}
-            onClick={() => setViewMode("player")}
-            label="By player"
-          />
-          <FilterToggle
-            active={viewMode === "card"}
-            onClick={() => setViewMode("card")}
-            label="By card"
+          <SegmentedControl
+            label="Group"
+            options={[
+              { value: "player", label: "By player" },
+              { value: "card", label: "By card" },
+            ]}
+            value={viewMode}
+            onChange={(value) => setViewMode(value as ChaseViewMode)}
           />
         </div>
       ) : null}
@@ -235,35 +235,50 @@ function ChaseSetDetailPanel({ setUuid }: { setUuid: string }) {
   );
 }
 
-function FilterToggle({
-  active,
-  onClick,
+/** One labeled axis of options rendered as a joined segment group — visually one control,
+ * so two side-by-side axes (ownership vs grouping) can't be misread as five peer buttons. */
+function SegmentedControl({
   label,
+  options,
+  value,
+  onChange,
 }: {
-  active: boolean;
-  onClick: () => void;
   label: string;
+  options: { value: string; label: string }[];
+  value: string;
+  onChange: (value: string) => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={
-        active
-          ? "rounded-lg border border-sky-500/50 bg-sky-500/10 px-3 py-2 text-xs font-medium text-sky-200"
-          : "rounded-lg border border-slate-800 px-3 py-2 text-xs text-slate-400 hover:border-slate-600"
-      }
-    >
-      {label}
-    </button>
+    <div className="flex items-center gap-2">
+      <span className="text-[10px] font-medium uppercase tracking-wider text-slate-500">
+        {label}
+      </span>
+      <div className="flex overflow-hidden rounded-lg border border-slate-800 bg-slate-950/60">
+        {options.map((option, index) => (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => onChange(option.value)}
+            aria-pressed={option.value === value}
+            className={`px-3 py-2 text-xs transition ${
+              index > 0 ? "border-l border-slate-800" : ""
+            } ${
+              option.value === value
+                ? "bg-sky-500/15 font-medium text-sky-200"
+                : "text-slate-400 hover:bg-slate-900 hover:text-slate-200"
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
 function PlayerChaseGroupRow({ group }: { group: PlayerChaseGroup }) {
   const [expanded, setExpanded] = useState(false);
-  const team = group.entries[0]?.card.subjects.find((subject) =>
-    subject.team?.trim(),
-  )?.team;
+  const team = group.entries[0] ? entryTeam(group.entries[0]) : null;
 
   return (
     <div
@@ -312,6 +327,7 @@ function ChaseCardEntry({
   owned: boolean;
 }) {
   const card = entry.card;
+  if (!card) return <PlayerSlotEntry entry={entry} owned={owned} />;
   const team = card.subjects.find((subject) => subject.team?.trim())?.team;
 
   return (
@@ -331,8 +347,12 @@ function ChaseCardEntry({
         <p className="truncate text-xs text-slate-500">{cardSubtitle(card)}</p>
         <p className="mt-1 text-[10px] uppercase tracking-wide text-slate-600">
           {entry.match_mode}
-          {entry.owned_printing ? ` · ${entry.owned_printing}` : ""}
         </p>
+        {owned && entry.owned_printing ? (
+          <p className="mt-0.5 truncate text-xs text-emerald-300">
+            Yours: {entry.owned_printing}
+          </p>
+        ) : null}
       </div>
       <div className="shrink-0 text-right">
         <p className="text-sm font-medium text-sky-300">
@@ -343,6 +363,57 @@ function ChaseCardEntry({
         </p>
       </div>
     </Link>
+  );
+}
+
+/** A player slot (match_mode any_card): the goal is the player, not a card. Filled, it shows
+ * the exact owned card that filled it; missing, it says what would count. */
+function PlayerSlotEntry({
+  entry,
+  owned,
+}: {
+  entry: CustomSetDetail["cards"][number];
+  owned: boolean;
+}) {
+  const quals = playerSlotQualifiers(entry);
+  const team = entry.subject_team ?? null;
+
+  return (
+    <div
+      className={`flex items-start gap-3 rounded-lg border px-3 py-2.5 ${
+        owned
+          ? "border-emerald-500/30 bg-emerald-500/5"
+          : "border-slate-800 bg-slate-950/40"
+      }`}
+    >
+      {team ? (
+        <TeamLogo team={team} size="sm" className="mt-0.5 shrink-0" />
+      ) : (
+        <PlayerAvatar name={entry.subject ?? "?"} size="sm" className="mt-0.5 shrink-0" />
+      )}
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium text-white">
+          {entry.subject ?? "Unknown player"}
+        </p>
+        <p className="truncate text-xs text-slate-500">
+          Player slot{quals.length ? ` · ${quals.join(" · ")}` : " · any card"}
+        </p>
+        {owned && entry.owned_printing ? (
+          <p className="mt-1 truncate text-xs text-emerald-300">
+            Filled by {entry.owned_printing}
+          </p>
+        ) : (
+          <p className="mt-1 truncate text-xs text-slate-500">
+            Needs {playerSlotNeed(entry)} of {entry.subject ?? "this player"}
+          </p>
+        )}
+      </div>
+      <div className="shrink-0 text-right">
+        <p className={`text-xs ${owned ? "text-emerald-400" : "text-slate-500"}`}>
+          {owned ? "Owned" : "Need"}
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -385,8 +456,8 @@ function ChaseCliHelp() {
           <div>
             <p className="font-medium text-white">Roster chase (one per player)</p>
             <p className="mt-1 text-slate-400">
-              Wizard → preview catalog → choose Roster chase. Slab groups matching
-              cards by player and adds one any_printing slot each.
+              Wizard → preview catalog → choose Roster chase. Slab adds one player
+              slot (any_card) per player — any matching card of them fills it.
             </p>
           </div>
 

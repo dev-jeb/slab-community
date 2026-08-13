@@ -5,6 +5,39 @@ import type { CustomSetCardOut } from "@/lib/slab/types";
 export type ChaseEntryFilter = "all" | "owned" | "missing";
 export type ChaseViewMode = "player" | "card";
 
+/** The player an entry is about — the subject itself for player slots (any_card),
+ * else the card's primary subject. */
+export function entryPlayerName(entry: CustomSetCardOut): string {
+  if (entry.subject) return entry.subject;
+  return primarySubjectName(entry.card?.subjects) || "Unknown";
+}
+
+/** Season formatted the hobby way: 2025 -> "2025-26". */
+export function seasonLabel(year: number): string {
+  return `${year}-${String(year + 1).slice(-2)}`;
+}
+
+/** A player slot's qualifier chips, e.g. ["2025-26", "Hurricanes", "Autograph"]. */
+export function playerSlotQualifiers(entry: CustomSetCardOut): string[] {
+  return [
+    entry.subject_year ? seasonLabel(entry.subject_year) : null,
+    entry.subject_team ?? null,
+    entry.subject_attribute ?? null,
+  ].filter((value): value is string => Boolean(value));
+}
+
+/** What a missing player slot needs, in words: "any 2025-26 Hurricanes card". */
+export function playerSlotNeed(entry: CustomSetCardOut): string {
+  const quals = playerSlotQualifiers(entry);
+  return quals.length ? `any ${quals.join(" ")} card` : "any card";
+}
+
+/** The team to badge an entry with — the card's printed team, or the slot's team qualifier. */
+export function entryTeam(entry: CustomSetCardOut): string | null {
+  const cardTeam = entry.card?.subjects.find((subject) => subject.team?.trim())?.team;
+  return cardTeam ?? entry.subject_team ?? null;
+}
+
 export interface PlayerChaseGroup {
   playerName: string;
   entries: CustomSetCardOut[];
@@ -19,7 +52,7 @@ export function groupChaseEntriesByPlayer(
   const groups = new Map<string, CustomSetCardOut[]>();
 
   for (const entry of entries) {
-    const playerName = primarySubjectName(entry.card?.subjects) || "Unknown";
+    const playerName = entryPlayerName(entry);
     const current = groups.get(playerName) ?? [];
     current.push(entry);
     groups.set(playerName, current);
@@ -64,11 +97,13 @@ export function searchChaseEntries(
   return entries.filter((entry) => {
     const card = entry.card;
     const haystack = [
-      primarySubjectName(card?.subjects),
-      cardTitle(card),
-      cardSubtitle(card),
+      entryPlayerName(entry),
+      card ? cardTitle(card) : null,
+      card ? cardSubtitle(card) : null,
       card?.card_number,
       card?.set_name,
+      ...playerSlotQualifiers(entry),
+      entry.owned_printing,
     ]
       .filter(Boolean)
       .join(" ")

@@ -7,7 +7,6 @@ import {
   validateChaseFilter,
 } from "@/lib/chase-filter";
 import { groupCardsByPlayer } from "@/lib/roster-chase";
-import { cardSubtitle, cardTitle } from "@/lib/slab/format";
 import {
   addCustomSetCard,
   createCustomSet,
@@ -83,6 +82,16 @@ export async function POST(request: Request) {
       visibility,
     });
 
+    // One any_card player slot per player — the goal is the player, so ANY matching card
+    // fills the slot. The wizard's own filters become the slot qualifiers (season/team), which
+    // is what keeps a 2025-26 roster from being "filled" by an old card in the binder.
+    const slotYear = body.filter?.year ?? null;
+    const slotTeam = body.filter?.team?.trim() || null;
+    const slotLabel =
+      [slotYear ? `${slotYear}-${String(slotYear + 1).slice(-2)}` : null, slotTeam]
+        .filter(Boolean)
+        .join(" ") || "any";
+
     const results: {
       player: string;
       status: "added" | "skipped";
@@ -91,14 +100,16 @@ export async function POST(request: Request) {
     let position = 0;
 
     for (const group of playerGroups) {
-      if (!group.representative) {
+      if (!group.subjectUuid) {
         results.push({ player: group.playerName, status: "skipped" });
         continue;
       }
 
       await addCustomSetCard(set.uuid, {
-        card_uuid: group.representative.uuid,
-        match_mode: "any_printing",
+        subject_uuid: group.subjectUuid,
+        match_mode: "any_card",
+        subject_year: slotYear,
+        subject_team: slotTeam,
         position,
       });
       position += 1;
@@ -106,7 +117,7 @@ export async function POST(request: Request) {
       results.push({
         player: group.playerName,
         status: "added",
-        cardLabel: `${cardTitle(group.representative)} — ${cardSubtitle(group.representative)}`,
+        cardLabel: `any ${slotLabel} card (${group.cards.length} in catalog)`,
       });
     }
 

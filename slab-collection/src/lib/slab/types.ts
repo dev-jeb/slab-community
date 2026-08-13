@@ -1,4 +1,5 @@
 export interface SubjectOut {
+  uuid?: string | null;
   name: string;
   team?: string | null;
   subject_type?: string;
@@ -432,6 +433,8 @@ export interface CustomSetOut {
   description?: string | null;
   visibility: string;
   set_type: string;
+  /** Dynamic sets only — set-wide match granularity; null for curated. */
+  dynamic_match?: string | null;
   cover_card?: CardOut | null;
   card_count: number;
   subscriber_count: number;
@@ -440,17 +443,29 @@ export interface CustomSetOut {
 
 export interface CustomSetCardOut {
   uuid: string;
-  card: CardOut;
+  /** The chased card — null for player slots (match_mode "any_card"). */
+  card?: CardOut | null;
+  /** The chased player's name — set only for player slots. */
+  subject?: string | null;
+  subject_uuid?: string | null;
   match_mode: string;
   serial_number?: number | null;
+  /** any_card qualifiers — narrow which card of the player counts. */
+  subject_year?: number | null;
+  subject_team?: string | null;
+  subject_attribute?: string | null;
   position: number;
   owned: boolean;
+  /** For player slots this names the exact owned card that filled the slot. */
   owned_printing?: string | null;
 }
 
 export interface CustomSetDetail extends CustomSetOut {
   cards: CustomSetCardOut[];
   completion?: CompletionStats | null;
+  /** The cards list is one page; completion always covers the whole set. */
+  limit?: number;
+  offset?: number;
 }
 
 export interface CustomSetCreate {
@@ -459,11 +474,18 @@ export interface CustomSetCreate {
   visibility?: "private" | "public";
   set_type: "curated" | "dynamic";
   filter_json?: Record<string, unknown> | null;
+  /** Dynamic sets: set-wide granularity (any_printing | exact | any_card). */
+  dynamic_match?: "any_printing" | "exact" | "any_card";
 }
 
 export interface CustomSetCardAdd {
-  card_uuid: string;
-  match_mode: "any_printing" | "exact" | "exact_serial";
+  /** Card modes take card_uuid; any_card player slots take subject_uuid instead. */
+  card_uuid?: string;
+  subject_uuid?: string;
+  match_mode: "any_printing" | "exact" | "exact_serial" | "any_card";
   serial_number?: number | null;
+  subject_year?: number | null;
+  subject_team?: string | null;
+  subject_attribute?: string | null;
   position?: number;
 }

@@ -30,6 +30,8 @@ export function pickRepresentativeCard(cards: CardOut[]): CardOut | null {
 
 export interface PlayerCardGroup {
   playerName: string;
+  /** The subject's UUID (served on card subjects) — what an any_card slot references. */
+  subjectUuid: string | null;
   cards: CardOut[];
   representative: CardOut | null;
 }
@@ -47,6 +49,10 @@ export function groupCardsByPlayer(cards: CardOut[]): PlayerCardGroup[] {
   return [...groups.entries()]
     .map(([playerName, playerCards]) => ({
       playerName,
+      subjectUuid:
+        playerCards
+          .flatMap((card) => card.subjects)
+          .find((subject) => subject.name === playerName && subject.uuid)?.uuid ?? null,
       cards: playerCards,
       representative: pickRepresentativeCard(playerCards),
     }))
