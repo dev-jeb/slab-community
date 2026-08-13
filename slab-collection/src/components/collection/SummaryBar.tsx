@@ -8,15 +8,22 @@ import {
 
 interface SummaryBarProps {
   summary?: PortfolioSummary | null;
-  total: number;
+  /** undefined while the matching request is in flight — renders as loading, never as 0. */
+  total?: number;
 }
 
 
 export function SummaryBar({ summary, total }: SummaryBarProps) {
+  const loading = total === undefined;
+
   return (
     <>
       <StatGrid className="hidden md:grid">
-        <StatCard label="Cards shown" value={String(total)} />
+        <StatCard
+          label="Cards shown"
+          value={loading ? "" : String(total)}
+          loading={loading}
+        />
         <StatCard
           label="Portfolio value"
           value={formatCurrency(summary?.portfolio_value)}
@@ -39,7 +46,8 @@ export function SummaryBar({ summary, total }: SummaryBarProps) {
 
       <section className="rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-3 md:hidden">
         <p className="text-sm text-slate-300">
-          <span className="font-semibold text-white">{total}</span> cards shown
+          <span className="font-semibold text-white">{loading ? "…" : total}</span>{" "}
+          cards shown
           <span className="text-slate-500"> · </span>
           <span>{formatCurrency(summary?.portfolio_value)}</span> portfolio
           {summary?.total_unrealized_gain_loss ? (

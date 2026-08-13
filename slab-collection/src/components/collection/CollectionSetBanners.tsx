@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 
 import { CardListRow } from "@/components/collection/CardListRow";
 import { GroupSortSelect } from "@/components/collection/GroupSortSelect";
+import { SheenBar, Sheen } from "@/components/ui/sheen";
+import { useGroupCopies } from "@/lib/use-group-copies";
 import { formatCurrency } from "@/lib/slab/format";
 import type { GroupSortOption } from "@/lib/collection-paging";
 import type { SetGroupOut } from "@/lib/slab/types";
@@ -84,6 +86,12 @@ export function CollectionSetBanners({
 }: CollectionSetBannersProps) {
   const [expandedSet, setExpandedSet] = useState<string | null>(null);
 
+  // Copies arrive on expand, not with the list — see useGroupCopies for what that saved.
+  const expandedGroup = groups.find((group) => group.set_uuid === expandedSet);
+  const { copies, loading } = useGroupCopies(
+    expandedGroup ? { set_slug: expandedGroup.set_slug } : null,
+  );
+
   // A new ordering renders different sets in the same positions, so a leftover expansion would
   // open a set the user didn't click.
   useEffect(() => {
@@ -128,9 +136,17 @@ export function CollectionSetBanners({
 
               {expanded ? (
                 <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/40 p-4">
-                  {(group.copies ?? []).map((copy) => (
-                    <CardListRow key={copy.uuid} copy={copy} />
-                  ))}
+                  {loading ? (
+                    <Sheen loading label={`Loading ${group.name}`} className="space-y-3">
+                      {Array.from({ length: 4 }).map((_, index) => (
+                        <SheenBar key={index} className="h-12 w-full" />
+                      ))}
+                    </Sheen>
+                  ) : (
+                    (copies ?? []).map((copy) => (
+                      <CardListRow key={copy.uuid} copy={copy} />
+                    ))
+                  )}
                 </div>
               ) : null}
             </section>

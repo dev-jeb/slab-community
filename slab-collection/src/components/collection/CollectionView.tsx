@@ -18,6 +18,7 @@ import {
   type CollectionFilter,
 } from "@/lib/collection-filters";
 import { CollectionBrowseTabs } from "@/components/collection/CollectionBrowseTabs";
+import { GroupSkeleton } from "@/components/collection/GroupSkeleton";
 import {
   collectionFetchKey,
   collectionParams,
@@ -74,6 +75,9 @@ export function CollectionView() {
   const [result, setResult] = useState<CollectionResult | null>(null);
   const [groups, setGroups] = useState<GroupResult<unknown> | null>(null);
   const [groupSort, setGroupSort] = useState<GroupSortOption>("-value");
+  // Which request the data on screen came from. Anything else means what's rendered belongs to
+  // a previous view, so counts and empty states from it would be about the wrong thing.
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [needsSetup, setNeedsSetup] = useState(false);
@@ -138,7 +142,10 @@ export function CollectionView() {
         // "Most players" is ordered in the teams view itself; the server has no such key, so ask
         // for the nearest thing and let that view refine it.
         group_sort: groupSort === TEAM_PLAYERS_SORT ? "-copies" : groupSort,
-        include_copies: true,
+        // Sets and teams fill a group in on expand (useGroupCopies), which took those lists
+        // from ~9s to ~0.7s. Duplicates keeps its copies: the list is small, and a duplicate
+        // group is one card, which the collection filters can't single out on their own.
+        include_copies: groupKind === "duplicates",
       }),
     });
 
@@ -164,13 +171,17 @@ export function CollectionView() {
       if (groupKind) {
         const data = await fetchGroups();
         if (data) setGroups(data);
+        // Marked done even on failure: the error banner explains what happened, and leaving a
+        // skeleton spinning forever would suggest the request is still coming.
+        setLoadedKey(fetchKey);
         return;
       }
 
       const data = await fetchPage(paged ? 0 : null);
       if (data) setResult(data);
+      setLoadedKey(fetchKey);
     });
-  }, [fetchGroups, fetchPage, groupKind, paged]);
+  }, [fetchGroups, fetchKey, fetchPage, groupKind, paged]);
 
   const loadMore = useCallback(() => {
     if (!paged || !result) return;
@@ -232,6 +243,10 @@ export function CollectionView() {
     if (paged) return loaded;
     return sortCollectionCopies(loaded, sort);
   }, [result?.items, sort, paged]);
+
+  // True from the moment the inputs change until that request's data is on screen — including
+  // the first load, when there's nothing to be stale.
+  const awaitingData = loadedKey !== fetchKey;
 
   const loadedCount = result?.items?.length ?? 0;
   const hasMore = paged && loadedCount < (result?.total ?? 0);
@@ -314,53 +329,6 @@ export function CollectionView() {
         </button>
       </div>
 
-      <form onSubmit={handleSubmit} className="hidden space-y-3 md:block">
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search player, set, or card number…"
-            className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-white outline-none focus:border-sky-500/50"
-          />
-          <button
-            type="submit"
-            disabled={isPending}
-            className="rounded-xl bg-sky-500 px-5 py-3 font-medium text-slate-950 hover:bg-sky-400 disabled:opacity-60"
-          >
-            {isPending ? "Searching…" : "Search"}
-          </button>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <label className="flex items-center gap-2 text-sm text-slate-400">
-            <span>Sort</span>
-            <select
-              value={sort}
-              onChange={(event) =>
-                handleSortChange(event.target.value as CollectionSortOption)
-              }
-              className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-white"
-            >
-              <option value="value_desc">Value</option>
-              <option value="confidence_desc">Price confidence</option>
-              <option value="card_number_asc">Card #: low to high</option>
-              <option value="card_number_desc">Card #: high to low</option>
-              <option value="alpha_asc">Last name (A–Z)</option>
-            </select>
-          </label>
-
-          <div className="ml-auto flex gap-2">
-            {showViewToggle ? (
-              <>
-                <ViewToggle active={view === "grid"} onClick={() => setView("grid")} label="Grid" />
-                <ViewToggle active={view === "list"} onClick={() => setView("list")} label="List" />
-              </>
-            ) : null}
-          </div>
-        </div>
-      </form>
-
       <CollectionFilterSheet
         open={filtersOpen}
         onClose={() => setFiltersOpen(false)}
@@ -385,11 +353,72 @@ export function CollectionView() {
 
       {result || groups ? (
         <>
-          <SummaryBar summary={result?.summary} total={displayTotal} />
+          <SummaryBar
+            summary={result?.summary}
+            total={awaitingData ? undefined : displayTotal}
+          />
 
-          {/* Right-aligned and content-width: these are controls, not headers. Full-bleed bars
-              read as section chrome and swallow the space the cards want. */}
-          <div className="hidden flex-col items-end gap-2 md:flex">
+          {/* One control band: what you're searching and sorting on the left, what you're
+              looking at on the right. Both were full-width rows before, stacked, which left a
+              wide empty gutter beside the pills and pushed the cards down twice. */}
+          <div className="hidden items-start justify-between gap-6 md:flex">
+            <form
+              onSubmit={handleSubmit}
+              className="flex min-w-0 max-w-xl flex-1 flex-col gap-2"
+            >
+              <div className="flex gap-2">
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search player, set, or card number…"
+                  className="min-w-0 flex-1 rounded-xl border border-slate-800 bg-slate-950 px-4 py-2 text-white outline-none focus:border-sky-500/50"
+                />
+                <button
+                  type="submit"
+                  disabled={isPending}
+                  className="shrink-0 rounded-xl bg-sky-500 px-4 py-2 font-medium text-slate-950 hover:bg-sky-400 disabled:opacity-60"
+                >
+                  {isPending ? "Searching…" : "Search"}
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-2 text-sm text-slate-400">
+                  <span>Sort</span>
+                  <select
+                    value={sort}
+                    onChange={(event) =>
+                      handleSortChange(event.target.value as CollectionSortOption)
+                    }
+                    className="rounded-lg border border-slate-800 bg-slate-950 px-2 py-1.5 text-sm text-white"
+                  >
+                    <option value="value_desc">Value</option>
+                    <option value="confidence_desc">Price confidence</option>
+                    <option value="card_number_asc">Card #: low to high</option>
+                    <option value="card_number_desc">Card #: high to low</option>
+                    <option value="alpha_asc">Last name (A–Z)</option>
+                  </select>
+                </label>
+
+                {showViewToggle ? (
+                  <div className="flex gap-2">
+                    <ViewToggle
+                      active={view === "grid"}
+                      onClick={() => setView("grid")}
+                      label="Grid"
+                    />
+                    <ViewToggle
+                      active={view === "list"}
+                      onClick={() => setView("list")}
+                      label="List"
+                    />
+                  </div>
+                ) : null}
+              </div>
+            </form>
+
+            <div className="flex shrink-0 flex-col items-end gap-2">
             <CollectionBrowseTabs
               value={browse}
               onChange={handleBrowseChange}
@@ -407,9 +436,12 @@ export function CollectionView() {
               onFilterChange={handleFilterChange}
               isPending={isPending}
             />
+            </div>
           </div>
 
-          {groupKind === "teams" ? (
+          {groupKind && awaitingData ? (
+            <GroupSkeleton />
+          ) : groupKind === "teams" ? (
             <CollectionTeamGroups
               groups={(groups?.items ?? []) as TeamGroupOut[]}
               sort={groupSort}
@@ -427,6 +459,15 @@ export function CollectionView() {
               sort={groupSort}
               onSortChange={setGroupSort}
             />
+          ) : awaitingData ? (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {Array.from({ length: 8 }).map((_, index) => (
+                <div
+                  key={index}
+                  className="sheen aspect-[3/5] rounded-xl border border-slate-800 bg-slate-900/40"
+                />
+              ))}
+            </div>
           ) : items.length > 0 ? (
             view === "grid" ? (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">

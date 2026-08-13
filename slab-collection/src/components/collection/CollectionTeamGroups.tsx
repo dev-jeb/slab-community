@@ -4,6 +4,8 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 import { CardListRow } from "@/components/collection/CardListRow";
 import { GroupSortSelect } from "@/components/collection/GroupSortSelect";
+import { Sheen, SheenBar } from "@/components/ui/sheen";
+import { useGroupCopies } from "@/lib/use-group-copies";
 import { TeamLogo } from "@/components/collection/TeamLogo";
 import { TEAM_PLAYERS_SORT, type GroupSortOption } from "@/lib/collection-paging";
 import type { TeamGroupOut } from "@/lib/slab/types";
@@ -113,6 +115,12 @@ export function CollectionTeamGroups({
 
   const columns = useTeamGridColumns();
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
+
+  // Copies arrive on expand. A team's copies are just the collection filtered by that team,
+  // so this needs no endpoint of its own.
+  const { copies, loading } = useGroupCopies(
+    expandedTeam ? { team: expandedTeam } : null,
+  );
   const tileRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const panelRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
@@ -237,12 +245,24 @@ export function CollectionTeamGroups({
                     Close
                   </button>
                 </div>
-                {(expandedGroup.copies ?? []).map((copy) => (
-                  <CardListRow
-                    key={`${expandedGroup.name}-${copy.uuid}`}
-                    copy={copy}
-                  />
-                ))}
+                {loading ? (
+                  <Sheen
+                    loading
+                    label={`Loading ${expandedGroup.name}`}
+                    className="space-y-3"
+                  >
+                    {Array.from({ length: 4 }).map((_, index) => (
+                      <SheenBar key={index} className="h-12 w-full" />
+                    ))}
+                  </Sheen>
+                ) : (
+                  (copies ?? []).map((copy) => (
+                    <CardListRow
+                      key={`${expandedGroup.name}-${copy.uuid}`}
+                      copy={copy}
+                    />
+                  ))
+                )}
               </div>
             ) : null}
           </Fragment>

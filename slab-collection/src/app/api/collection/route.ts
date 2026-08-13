@@ -29,6 +29,8 @@ export async function GET(request: NextRequest) {
     is_numbered: params.get("is_numbered") === "true" ? true : undefined,
     graded: params.get("graded") === "true" ? true : undefined,
     team: params.get("team") ?? undefined,
+    // Set membership, so an expanded set group can pull exactly its own copies.
+    set_slug: params.get("set_slug") ?? undefined,
   };
 
   try {

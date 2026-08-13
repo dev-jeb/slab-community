@@ -154,6 +154,8 @@ export interface CollectionSearchQuery {
   is_numbered?: boolean;
   graded?: boolean;
   team?: string | null;
+  /** Set membership. The API takes a list; a bare string is accepted as a one-item CSV. */
+  set_slug?: string | string[] | null;
   limit?: number;
   offset?: number;
   status?: string[] | null;
