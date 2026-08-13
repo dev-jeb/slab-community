@@ -3,7 +3,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 import { CardListRow } from "@/components/collection/CardListRow";
-import { GroupSortSelect } from "@/components/collection/GroupSortSelect";
 import { Sheen, SheenBar } from "@/components/ui/sheen";
 import { useGroupCopies } from "@/lib/use-group-copies";
 import { TeamLogo } from "@/components/collection/TeamLogo";
@@ -21,7 +20,6 @@ interface CollectionTeamGroupsProps {
   /** Teams as the API grouped them — one entry per team the collection depicts. */
   groups: TeamGroupOut[];
   sort: GroupSortOption;
-  onSortChange: (sort: GroupSortOption) => void;
 }
 
 interface TeamTileProps {
@@ -102,7 +100,6 @@ function rowEndIndex(index: number, columns: number, total: number): number {
 export function CollectionTeamGroups({
   groups: serverGroups,
   sort,
-  onSortChange,
 }: CollectionTeamGroupsProps) {
   // "Most players" is applied here; every other ordering already arrived that way. See
   // TEAM_PLAYERS_SORT above for why this one isn't a server sort.
@@ -183,12 +180,6 @@ export function CollectionTeamGroups({
         <p className="text-sm text-slate-400">
           {groups.length} team{groups.length === 1 ? "" : "s"} in your collection
         </p>
-        <GroupSortSelect
-          label="Sort teams"
-          value={sort}
-          onChange={onSortChange}
-          extraOptions={[{ value: TEAM_PLAYERS_SORT, label: "Most players" }]}
-        />
       </div>
 
       <div className="grid items-start gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">

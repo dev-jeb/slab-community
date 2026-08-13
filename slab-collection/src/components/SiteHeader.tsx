@@ -38,18 +38,30 @@ export function SiteHeader() {
   const pathname = usePathname();
   const { alertCount } = useNews();
 
+  // On desktop the nav already says where you are, so repeating it as a heading spent a whole row
+  // saying nothing. Detail pages have no nav entry, so they still need a title.
+  const inNav = links.some((link) => linkActive(pathname, link.href));
+
   return (
     <header className="border-b border-slate-800/80 bg-[#0b1120]/95 backdrop-blur">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 md:px-6 md:py-5">
-        <div className="min-w-0">
-          <p className="text-[10px] uppercase tracking-[0.25em] text-sky-400 md:text-xs">
-            Slab Collection
-          </p>
-          <h1 className="mt-1 truncate text-xl font-semibold text-white md:text-2xl">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 md:px-6">
+        <div className="flex min-w-0 items-baseline gap-3">
+          <Link
+            href="/"
+            className="shrink-0 text-sm font-semibold uppercase tracking-[0.2em] text-sky-400 transition hover:text-sky-300"
+          >
+            Slab
+          </Link>
+          <h1
+            className={`truncate text-base font-semibold text-white ${
+              inNav ? "md:hidden" : ""
+            }`}
+          >
             {pageTitleForPath(pathname)}
           </h1>
         </div>
-        <nav className="hidden flex-wrap gap-4 text-sm md:flex md:gap-6">
+
+        <nav className="hidden items-center gap-1 md:flex">
           {links.map((link) => {
             const active = linkActive(pathname, link.href);
             const badge = link.showBadge && alertCount > 0 ? alertCount : 0;
@@ -58,15 +70,18 @@ export function SiteHeader() {
               <Link
                 key={link.href}
                 href={link.href}
-                className={
+                aria-current={active ? "page" : undefined}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition ${
                   active
-                    ? "relative text-white"
-                    : "relative text-slate-400 transition hover:text-slate-200"
-                }
+                    ? "bg-sky-500/15 text-sky-100 ring-1 ring-sky-400/40"
+                    : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
+                }`}
               >
                 {link.label}
                 {badge > 0 ? (
-                  <span className="absolute -right-3 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-sky-500 px-1 text-[10px] font-semibold text-white">
+                  // Inline, not absolutely positioned: on the last nav item an offset badge hung
+                  // past the container and clipped at the window edge.
+                  <span className="rounded-full bg-sky-500 px-1.5 py-px text-[10px] font-semibold text-white">
                     {badge > 9 ? "9+" : badge}
                   </span>
                 ) : null}

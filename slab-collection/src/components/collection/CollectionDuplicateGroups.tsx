@@ -3,18 +3,14 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { GroupSortSelect } from "@/components/collection/GroupSortSelect";
 import { OwnedCopyRow } from "@/components/collection/OwnedCopyRow";
 import { PlayerAvatar, primarySubjectName } from "@/components/collection/PlayerAvatar";
 import { cardSubtitle, cardTitle, formatCurrency } from "@/lib/slab/format";
-import type { GroupSortOption } from "@/lib/collection-paging";
 import type { DuplicateGroupOut } from "@/lib/slab/types";
 
 interface CollectionDuplicateGroupsProps {
   /** Cards held more than once, as the API grouped them. */
   groups: DuplicateGroupOut[];
-  sort: GroupSortOption;
-  onSortChange: (sort: GroupSortOption) => void;
 }
 
 interface DuplicateBannerProps {
@@ -71,16 +67,14 @@ function DuplicateBanner({ group, expanded, onToggle }: DuplicateBannerProps) {
 
 export function CollectionDuplicateGroups({
   groups,
-  sort,
-  onSortChange,
 }: CollectionDuplicateGroupsProps) {
   const [expandedUuid, setExpandedUuid] = useState<string | null>(null);
 
-  // Reordering puts different cards in the same positions; a stale expansion would open one the
-  // user didn't click.
+  // A new ordering puts different rows in the same positions, so a stale expansion would open
+  // something the user didn't click.
   useEffect(() => {
     setExpandedUuid(null);
-  }, [sort]);
+  }, [groups]);
 
   if (groups.length === 0) {
     return (
@@ -96,7 +90,6 @@ export function CollectionDuplicateGroups({
         <p className="text-sm text-slate-400">
           {groups.length} card{groups.length === 1 ? "" : "s"} with multiple copies
         </p>
-        <GroupSortSelect label="Sort" value={sort} onChange={onSortChange} />
       </div>
 
       <div className="space-y-3">

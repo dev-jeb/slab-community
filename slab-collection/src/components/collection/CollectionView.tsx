@@ -18,6 +18,7 @@ import {
   type CollectionFilter,
 } from "@/lib/collection-filters";
 import { CollectionBrowseTabs } from "@/components/collection/CollectionBrowseTabs";
+import { CollectionSortSelect } from "@/components/collection/CollectionSortSelect";
 import { GroupSkeleton } from "@/components/collection/GroupSkeleton";
 import {
   collectionFetchKey,
@@ -384,22 +385,13 @@ export function CollectionView() {
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
-                <label className="flex items-center gap-2 text-sm text-slate-400">
-                  <span>Sort</span>
-                  <select
-                    value={sort}
-                    onChange={(event) =>
-                      handleSortChange(event.target.value as CollectionSortOption)
-                    }
-                    className="rounded-lg border border-slate-800 bg-slate-950 px-2 py-1.5 text-sm text-white"
-                  >
-                    <option value="value_desc">Value</option>
-                    <option value="confidence_desc">Price confidence</option>
-                    <option value="card_number_asc">Card #: low to high</option>
-                    <option value="card_number_desc">Card #: high to low</option>
-                    <option value="alpha_asc">Last name (A–Z)</option>
-                  </select>
-                </label>
+                <CollectionSortSelect
+                  browse={browse}
+                  cardSort={sort}
+                  onCardSortChange={handleSortChange}
+                  groupSort={groupSort}
+                  onGroupSortChange={setGroupSort}
+                />
 
                 {showViewToggle ? (
                   <div className="flex gap-2">
@@ -445,19 +437,14 @@ export function CollectionView() {
             <CollectionTeamGroups
               groups={(groups?.items ?? []) as TeamGroupOut[]}
               sort={groupSort}
-              onSortChange={setGroupSort}
             />
           ) : groupKind === "sets" ? (
             <CollectionSetBanners
               groups={(groups?.items ?? []) as SetGroupOut[]}
-              sort={groupSort}
-              onSortChange={setGroupSort}
             />
           ) : groupKind === "duplicates" ? (
             <CollectionDuplicateGroups
               groups={(groups?.items ?? []) as DuplicateGroupOut[]}
-              sort={groupSort}
-              onSortChange={setGroupSort}
             />
           ) : awaitingData ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">

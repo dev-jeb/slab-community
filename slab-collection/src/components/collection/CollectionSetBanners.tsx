@@ -3,18 +3,14 @@
 import { useEffect, useState } from "react";
 
 import { CardListRow } from "@/components/collection/CardListRow";
-import { GroupSortSelect } from "@/components/collection/GroupSortSelect";
 import { SheenBar, Sheen } from "@/components/ui/sheen";
 import { useGroupCopies } from "@/lib/use-group-copies";
 import { formatCurrency } from "@/lib/slab/format";
-import type { GroupSortOption } from "@/lib/collection-paging";
 import type { SetGroupOut } from "@/lib/slab/types";
 
 interface CollectionSetBannersProps {
   /** Groups as the API rolled them up — already filtered, aggregated, and ordered. */
   groups: SetGroupOut[];
-  sort: GroupSortOption;
-  onSortChange: (sort: GroupSortOption) => void;
 }
 
 function setSubtitle(group: {
@@ -81,8 +77,6 @@ function SetBanner({
 
 export function CollectionSetBanners({
   groups,
-  sort,
-  onSortChange,
 }: CollectionSetBannersProps) {
   const [expandedSet, setExpandedSet] = useState<string | null>(null);
 
@@ -92,11 +86,11 @@ export function CollectionSetBanners({
     expandedGroup ? { set_slug: expandedGroup.set_slug } : null,
   );
 
-  // A new ordering renders different sets in the same positions, so a leftover expansion would
-  // open a set the user didn't click.
+  // A new ordering puts different rows in the same positions, so a stale expansion would open
+  // something the user didn't click.
   useEffect(() => {
     setExpandedSet(null);
-  }, [sort]);
+  }, [groups]);
 
   if (groups.length === 0) {
     return (
@@ -112,7 +106,6 @@ export function CollectionSetBanners({
         <p className="text-sm text-slate-400">
           {groups.length} set{groups.length === 1 ? "" : "s"} in your collection
         </p>
-        <GroupSortSelect label="Sort sets" value={sort} onChange={onSortChange} />
       </div>
 
       <div className="space-y-3">
