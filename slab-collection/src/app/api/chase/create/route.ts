@@ -41,18 +41,29 @@ export async function POST(request: Request) {
 
     const visibility = body.visibility === "public" ? "public" : "private";
 
-    if (body.mode === "master") {
+    // "master" is the legacy name for slots-granularity dynamic sets.
+    const mode = (body.mode as string) === "master" ? "slots" : body.mode;
+
+    // Three of the four shapes are the SAME dynamic set at different rungs of the match
+    // ladder — only the granularity differs. The API computes membership; nothing to loop.
+    const DYNAMIC_MATCH: Record<string, "any_card" | "any_printing" | "exact"> = {
+      roster: "any_card",
+      slots: "any_printing",
+      printings: "exact",
+    };
+    if (mode in DYNAMIC_MATCH) {
       const set = await createCustomSet({
         name: body.name.trim(),
         description: body.description?.trim() || null,
         set_type: "dynamic",
         visibility,
         filter_json: filterJson,
+        dynamic_match: DYNAMIC_MATCH[mode],
       });
 
       return NextResponse.json({
         set,
-        mode: "master",
+        mode,
         added: 0,
         totalCards: null,
         playerCount: null,
@@ -73,6 +84,8 @@ export async function POST(request: Request) {
       );
     }
 
+    // roster-frozen: the previewed players, materialized as curated any_card entries the
+    // creator can prune/retune afterward — the set does NOT grow with the catalog.
     const set = await createCustomSet({
       name: body.name.trim(),
       description:
@@ -125,7 +138,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       set,
-      mode: "roster",
+      mode: "roster-frozen",
       added,
       totalCards: total,
       playerCount: playerGroups.length,

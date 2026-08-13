@@ -15,7 +15,15 @@ export interface ChaseFilterInput {
   numberedMax?: number;
 }
 
-export type ChaseSetMode = "roster" | "master";
+/** The match-mode ladder, as bulk-creation shapes — what does one slot mean?
+ *
+ * - `roster`         one slot per PLAYER, auto-growing (dynamic, `any_card`)
+ * - `roster-frozen`  one slot per player, fixed editable list (curated `any_card` entries)
+ * - `slots`          one slot per CARD; base or any parallel fills it (dynamic, `any_printing`)
+ * - `printings`      every printing its own slot (dynamic, `exact`)
+ *
+ * (`master` is the legacy name for `slots`; the create route still accepts it.) */
+export type ChaseSetMode = "roster" | "roster-frozen" | "slots" | "printings";
 export type ChaseSetVisibility = "private" | "public";
 
 export interface ChaseCreateRequest {

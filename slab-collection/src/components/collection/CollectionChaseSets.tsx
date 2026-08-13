@@ -459,8 +459,9 @@ function ChaseCliHelp() {
           <div>
             <p className="font-medium text-white">Roster chase (one per player)</p>
             <p className="mt-1 text-slate-400">
-              Wizard → preview catalog → choose Roster chase. Slab adds one player
-              slot (any_card) per player — any matching card of them fills it.
+              Wizard → preview catalog → choose a roster chase: auto-growing (a
+              dynamic any_card set) or a fixed list of editable player slots. Either
+              way, any matching card of a player fills their slot.
             </p>
           </div>
 

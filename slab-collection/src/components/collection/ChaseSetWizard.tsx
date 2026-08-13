@@ -435,48 +435,58 @@ export function ChaseSetWizard({ onCreated }: ChaseSetWizardProps) {
                     </div>
                   ) : null}
 
+                  {/* One radio per rung of the match ladder, loosest first: what does a
+                      single slot MEAN, and what fills it? */}
                   <fieldset className="space-y-2">
                     <legend className="text-sm font-medium text-white">
-                      Set type
+                      What does one slot mean?
                     </legend>
-                    <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-800 bg-slate-950/40 p-3">
-                      <input
-                        type="radio"
-                        name="chase-mode"
-                        checked={mode === "roster"}
-                        onChange={() => setMode("roster")}
-                        className="mt-1"
-                        disabled={createLoading}
-                      />
-                      <span>
-                        <span className="block text-sm font-medium text-white">
-                          Roster chase (recommended)
+                    {(
+                      [
+                        {
+                          id: "roster",
+                          title: "Roster chase — auto-growing (recommended)",
+                          desc: `One slot per player (${preview.playerCount} today) — any matching card of them fills it, and new players join the set as they get carded.`,
+                        },
+                        {
+                          id: "roster-frozen",
+                          title: "Roster chase — fixed list",
+                          desc: `These ${preview.playerCount} players as editable player slots — prune or retune them afterward; the list never changes on its own.`,
+                        },
+                        {
+                          id: "slots",
+                          title: "Team set — one slot per card",
+                          desc: "Every card in the filter, collapsed to its slot — the base or ANY parallel of it checks the box.",
+                        },
+                        {
+                          id: "printings",
+                          title: "Full rainbow — every printing",
+                          desc: `All ${preview.total} matching printings, each its own slot — only that exact card fills it.`,
+                        },
+                      ] as const
+                    ).map((option) => (
+                      <label
+                        key={option.id}
+                        className="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-800 bg-slate-950/40 p-3"
+                      >
+                        <input
+                          type="radio"
+                          name="chase-mode"
+                          checked={mode === option.id}
+                          onChange={() => setMode(option.id)}
+                          className="mt-1"
+                          disabled={createLoading}
+                        />
+                        <span>
+                          <span className="block text-sm font-medium text-white">
+                            {option.title}
+                          </span>
+                          <span className="mt-0.5 block text-xs text-slate-400">
+                            {option.desc}
+                          </span>
                         </span>
-                        <span className="mt-0.5 block text-xs text-slate-400">
-                          One player slot each ({preview.playerCount} players) —
-                          ANY matching card of the player fills it
-                        </span>
-                      </span>
-                    </label>
-                    <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-800 bg-slate-950/40 p-3">
-                      <input
-                        type="radio"
-                        name="chase-mode"
-                        checked={mode === "master"}
-                        onChange={() => setMode("master")}
-                        className="mt-1"
-                        disabled={createLoading}
-                      />
-                      <span>
-                        <span className="block text-sm font-medium text-white">
-                          Master set (dynamic)
-                        </span>
-                        <span className="mt-0.5 block text-xs text-slate-400">
-                          Every matching catalog card ({preview.total} slots) —
-                          auto-updates as Slab catalogs new cards
-                        </span>
-                      </span>
-                    </label>
+                      </label>
+                    ))}
                   </fieldset>
                 </>
               ) : null}
@@ -484,12 +494,12 @@ export function ChaseSetWizard({ onCreated }: ChaseSetWizardProps) {
               {createLoading ? (
                 <LoadingPanel
                   title={
-                    mode === "roster"
+                    mode === "roster-frozen"
                       ? "Building roster set…"
-                      : "Creating master set…"
+                      : "Creating chase set…"
                   }
                   detail={
-                    mode === "roster"
+                    mode === "roster-frozen"
                       ? "Adding one player slot per player — any matching card counts."
                       : "Saving filter rules to your chase set."
                   }
@@ -501,14 +511,17 @@ export function ChaseSetWizard({ onCreated }: ChaseSetWizardProps) {
                   onBack={() => setStep("filters")}
                   onNext={createSet}
                   nextLabel={
-                    mode === "roster"
-                      ? "Create roster set"
-                      : "Create master set"
+                    mode === "roster" || mode === "roster-frozen"
+                      ? "Create roster chase"
+                      : mode === "slots"
+                        ? "Create team set"
+                        : "Create printing set"
                   }
                   disableNext={
                     !preview ||
-                    (mode === "roster" && preview.playerCount === 0) ||
-                    (mode === "master" && preview.total === 0)
+                    ((mode === "roster" || mode === "roster-frozen") &&
+                      preview.playerCount === 0) ||
+                    ((mode === "slots" || mode === "printings") && preview.total === 0)
                   }
                 />
               ) : null}
@@ -517,19 +530,29 @@ export function ChaseSetWizard({ onCreated }: ChaseSetWizardProps) {
 
           {step === "done" && createResult ? (
             <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-100">
-              {createResult.mode === "master" ? (
+              {createResult.mode === "roster" ? (
                 <p>
-                  Master set created. Slab will track all{" "}
-                  {preview?.total ?? "matching"} catalog cards against your
-                  collection.
+                  Roster chase created — one slot per player
+                  {preview ? ` (${preview.playerCount} today)` : ""}, filled by any
+                  matching card of them, growing as new players get carded.
                 </p>
-              ) : (
+              ) : createResult.mode === "roster-frozen" ? (
                 <p>
                   Roster set created with {createResult.added} player slots
                   {createResult.totalCards
                     ? ` from ${createResult.totalCards} catalog cards`
                     : ""}
                   .
+                </p>
+              ) : createResult.mode === "slots" ? (
+                <p>
+                  Team set created — one slot per card; the base or any parallel of
+                  it checks the box.
+                </p>
+              ) : (
+                <p>
+                  Printing set created — all {preview?.total ?? "matching"} printings
+                  tracked, each as its own slot.
                 </p>
               )}
               <button
