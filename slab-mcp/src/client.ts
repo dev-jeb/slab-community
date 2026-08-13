@@ -5,10 +5,12 @@
  * nothing about cards. Endpoint knowledge lives in the tool modules, so adding
  * an endpoint never means touching this file.
  *
- * The response types are declared structurally in `types.ts` rather than
+ * The response types are declared structurally in `types.ts` rather thanß
  * generated, because a generated client would have to be regenerated to stay
  * honest. `GET /openapi.json` is the authoritative contract and is exposed to
  * the model as a resource — see src/resources/index.ts.
+ * 
+ * deploy
  */
 
 import type { Config } from './config.js';
