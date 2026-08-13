@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getCommunityBoard, SlabApiError } from "@/lib/slab/client";
+import { getPopularCustomSets, SlabApiError } from "@/lib/slab/client";
 
 function handleError(error: unknown) {
   if (error instanceof SlabApiError) {
@@ -14,8 +14,10 @@ function handleError(error: unknown) {
 
 export async function GET() {
   try {
-    const board = await getCommunityBoard(20);
-    return NextResponse.json({ sets: board.popular_sets ?? [] });
+    // Only the popular sets are rendered here. This used to fetch the whole community board
+    // and discard every other field with it.
+    const sets = await getPopularCustomSets(20);
+    return NextResponse.json({ sets });
   } catch (error) {
     return handleError(error);
   }

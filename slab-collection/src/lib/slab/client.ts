@@ -319,6 +319,18 @@ export async function getPortfolioHistory(
   );
 }
 
+/**
+ * The most-subscribed public chase sets.
+ *
+ * Use this, not `getCommunityBoard`, when popular sets are all you need. The board is one payload
+ * carrying catalog stats, a ticker, several leaderboards, and a glossary, and it embeds this list
+ * as one field — measured at 15.6s and 32KB against 0.24s and 398 bytes for the list on its own.
+ */
+export async function getPopularCustomSets(limit = 20): Promise<CustomSetOut[]> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  return slabFetch<CustomSetOut[]>(`/custom-sets/popular?${params.toString()}`);
+}
+
 export async function getCommunityBoard(limit = 20): Promise<CommunityBoard> {
   const params = new URLSearchParams({ limit: String(limit) });
   return slabFetch<CommunityBoard>(`/community?${params.toString()}`);
