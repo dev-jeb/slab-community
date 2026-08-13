@@ -363,7 +363,32 @@ export async function addCustomSetCard(
 }
 
 const SETS_PAGE_SIZE = 200;
-const COLLECTION_PAGE_SIZE = 100;
+// 200 is the API's cap (slab_schemas CollectionSearchQuery.limit: ge=1, le=200), so anything
+// smaller just buys extra round trips.
+const COLLECTION_PAGE_SIZE = 200;
+// How many page requests to keep in the air at once. Enough to hide latency, low enough that a
+// large collection doesn't fire 50 simultaneous requests at the API.
+const PAGE_CONCURRENCY = 6;
+
+/** Run `task` over every item, keeping at most `limit` in flight. Results keep input order. */
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  task: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor++;
+      results[index] = await task(items[index]);
+    }
+  });
+
+  await Promise.all(workers);
+  return results;
+}
 
 export async function fetchAllSets(): Promise<SetOut[]> {
   const sets: SetOut[] = [];
@@ -390,22 +415,32 @@ export async function fetchCollection(
   query: CollectionSearchQuery = {},
 ): Promise<CollectionResult> {
   const { limit: _limit, offset: _offset, ...filters } = query;
-  const copies: CardCopyOut[] = [];
-  let offset = 0;
-  let total = Infinity;
-  let summary: CollectionResult["summary"];
 
-  while (offset < total) {
-    const page = await searchCollection({
-      ...filters,
-      limit: COLLECTION_PAGE_SIZE,
-      offset,
-    });
-    total = page.total;
-    summary = page.summary ?? summary;
-    copies.push(...(page.items ?? []));
-    offset += COLLECTION_PAGE_SIZE;
-    if (!page.items?.length) break;
+  // The first page tells us the total, which is what lets the rest go out together. Paging
+  // serially meant every page waited on the one before it, so a large collection cost the sum of
+  // all round trips instead of roughly one.
+  const first = await searchCollection({
+    ...filters,
+    limit: COLLECTION_PAGE_SIZE,
+    offset: 0,
+  });
+
+  const total = first.total ?? 0;
+  const copies: CardCopyOut[] = [...(first.items ?? [])];
+
+  if (copies.length && copies.length < total) {
+    const offsets: number[] = [];
+    for (let offset = COLLECTION_PAGE_SIZE; offset < total; offset += COLLECTION_PAGE_SIZE) {
+      offsets.push(offset);
+    }
+
+    const pages = await mapWithConcurrency(offsets, PAGE_CONCURRENCY, (offset) =>
+      searchCollection({ ...filters, limit: COLLECTION_PAGE_SIZE, offset }),
+    );
+
+    for (const page of pages) {
+      copies.push(...(page.items ?? []));
+    }
   }
 
   return {
@@ -413,7 +448,7 @@ export async function fetchCollection(
     limit: copies.length,
     offset: 0,
     items: copies,
-    summary,
+    summary: first.summary,
   };
 }
 
