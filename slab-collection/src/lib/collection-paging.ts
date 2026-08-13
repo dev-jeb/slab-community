@@ -1,6 +1,7 @@
 import {
   categoryQueryParams,
-  type CollectionCategoryFilter,
+  type CollectionBrowseMode,
+  type CollectionFilter,
 } from "@/lib/collection-filters";
 import type { CollectionSortOption } from "@/lib/collection-sort";
 import type { GroupSort } from "@/lib/slab/types";
@@ -17,24 +18,19 @@ export type GroupSortOption = GroupSort | typeof TEAM_PLAYERS_SORT;
 /** Rows per request when the API is doing the paging. */
 export const COLLECTION_PAGE_SIZE = 48;
 
-/**
- * Views that aggregate over the whole collection rather than listing copies. They used to force a
- * full-collection load so the browser could group it; the API now rolls them up and pages the
- * GROUPS, so each maps to its own endpoint instead.
- */
-const GROUP_ENDPOINTS: Partial<Record<CollectionCategoryFilter, CollectionGroupKind>> = {
-  by_set: "sets",
-  duplicates: "duplicates",
-  teams: "teams",
-};
-
 export type CollectionGroupKind = "sets" | "duplicates" | "teams";
 
-/** The grouped endpoint backing a category, or null when the category lists copies. */
+/**
+ * The grouped endpoint backing a browse mode, or null for the plain card list.
+ *
+ * Every mode except `cards` is served by an endpoint of the same name, which is why this is a
+ * one-line mapping rather than a table: the UI's presentation choice and the API's grouped views
+ * are the same set of concepts.
+ */
 export function groupKindFor(
-  category: CollectionCategoryFilter,
+  browse: CollectionBrowseMode,
 ): CollectionGroupKind | null {
-  return GROUP_ENDPOINTS[category] ?? null;
+  return browse === "cards" ? null : browse;
 }
 
 /**
@@ -59,20 +55,20 @@ export function serverSortKey(sort: CollectionSortOption): string | null {
  * True when the API can both filter and order this view, so the browser only needs one page.
  *
  * False means the browser still has to do the ordering, which is only correct over a fully-loaded
- * collection — the two sorts the API can't express. Grouped categories are neither: they have
- * their own endpoints (see `groupKindFor`) and never take this path.
+ * collection — the two sorts the API can't express. Grouped modes are neither: they have their own
+ * endpoints (see `groupKindFor`) and never take this path.
  */
 export function usesServerPaging(
-  category: CollectionCategoryFilter,
+  browse: CollectionBrowseMode,
   sort: CollectionSortOption,
 ): boolean {
-  if (groupKindFor(category)) return false;
+  if (groupKindFor(browse)) return false;
   return SERVER_SORT[sort] !== null;
 }
 
 export interface CollectionRequest {
   search?: string;
-  category: CollectionCategoryFilter;
+  filter: CollectionFilter;
   sort: CollectionSortOption;
   /** Row to start at, or null to fetch the whole collection. */
   offset: number | null;
@@ -84,7 +80,7 @@ export interface CollectionRequest {
  */
 export function collectionParams({
   search,
-  category,
+  filter,
   sort,
   offset,
 }: CollectionRequest): URLSearchParams {
@@ -101,7 +97,7 @@ export function collectionParams({
 
   if (search) params.set("q", search);
 
-  for (const [key, value] of Object.entries(categoryQueryParams(category))) {
+  for (const [key, value] of Object.entries(categoryQueryParams(filter))) {
     params.set(key, value);
   }
 
@@ -113,11 +109,16 @@ export function collectionParams({
  * rows, so re-sorting in the browser doesn't trigger a refetch.
  */
 export function collectionFetchKey(
-  category: CollectionCategoryFilter,
+  filter: CollectionFilter,
   sort: CollectionSortOption,
   search: string,
 ): string {
-  return usesServerPaging(category, sort)
-    ? `paged|${serverSortKey(sort)}|${category}|${search}`
-    : `all|${category}|${search}`;
+  return usesServerPaging("cards", sort)
+    ? `paged|${serverSortKey(sort)}|${filter}|${search}`
+    : `all|${filter}|${search}`;
+}
+
+/** Filter params for a grouped request — the same narrowing, applied before the roll-up. */
+export function groupFilterParams(filter: CollectionFilter): Record<string, string> {
+  return categoryQueryParams(filter);
 }

@@ -1,6 +1,22 @@
 import { compareLastName, primarySubjectName } from "@/lib/names";
 import type { CardCopyOut, CardOut } from "@/lib/slab/types";
 
+/**
+ * The two axes the collection page is browsed along, deliberately separate.
+ *
+ * They used to be one enum, which put "Autos" and "Teams" side by side as if they were the same
+ * kind of choice. They aren't: one narrows the collection, the other changes how it's presented —
+ * and because they were fused, you couldn't ask for "my rookies, by set", even though the API has
+ * supported exactly that since the grouped endpoints took the full filter grammar.
+ */
+
+/** How the collection is PRESENTED: a list of cards, or rolled up. */
+export type CollectionBrowseMode = "cards" | "sets" | "teams" | "duplicates";
+
+/** What NARROWS it. Applies inside every browse mode. */
+export type CollectionFilter = "all" | "auto" | "rookie" | "numbered";
+
+/** @deprecated The fused enum. Kept only for helpers that still take it. */
 export type CollectionCategoryFilter =
   | "all"
   | "auto"
@@ -176,8 +192,9 @@ export function filterByCategory(
   return items;
 }
 
+/** The API filter params a filter selection stands for. Applies to card and grouped requests alike. */
 export function categoryQueryParams(
-  category: CollectionCategoryFilter,
+  category: CollectionFilter,
 ): Record<string, string> {
   switch (category) {
     case "auto":

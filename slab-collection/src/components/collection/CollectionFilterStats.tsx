@@ -1,30 +1,24 @@
 import { sheenClass, SheenContent } from "@/components/ui/sheen";
-import type { CollectionCategoryFilter } from "@/lib/collection-filters";
+import type { CollectionFilter } from "@/lib/collection-filters";
 import type { DashboardStats } from "@/lib/slab/types";
 
 
 interface CollectionFilterStatsProps {
   stats: DashboardStats | null;
-  activeFilter: CollectionCategoryFilter;
-  onFilterChange: (filter: CollectionCategoryFilter) => void;
+  activeFilter: CollectionFilter;
+  onFilterChange: (filter: CollectionFilter) => void;
   isPending?: boolean;
-  setCount?: number;
-  duplicateCount?: number;
 }
 
 interface StatItem {
-  id: CollectionCategoryFilter;
+  id: CollectionFilter;
   label: string;
   /** undefined = still loading. The chip stays clickable; it just doesn't claim a number yet. */
   value: number | undefined;
   hint?: string;
 }
 
-function buildStatItems(
-  stats: DashboardStats | null,
-  setCount?: number,
-  duplicateCount?: number,
-): StatItem[] {
+function buildStatItems(stats: DashboardStats | null): StatItem[] {
   return [
     { id: "auto", label: "Autos", value: stats?.autos },
     { id: "rookie", label: "Rookies", value: stats?.rookies },
@@ -32,23 +26,6 @@ function buildStatItems(
       id: "numbered",
       label: "Numbered",
       value: stats?.numbered,
-    },
-    {
-      id: "teams",
-      label: "Teams",
-      value: stats?.teams,
-    },
-    {
-      id: "by_set",
-      label: "Sets",
-      value: setCount,
-      hint: "Browse by product",
-    },
-    {
-      id: "duplicates",
-      label: "Duplicates",
-      value: duplicateCount,
-      hint: "Multiple copies",
     },
   ];
 }
@@ -58,12 +35,10 @@ export function CollectionFilterStats({
   activeFilter,
   onFilterChange,
   isPending = false,
-  setCount,
-  duplicateCount,
 }: CollectionFilterStatsProps) {
-  const items = buildStatItems(stats, setCount, duplicateCount);
+  const items = buildStatItems(stats);
 
-  function handleClick(id: CollectionCategoryFilter) {
+  function handleClick(id: CollectionFilter) {
     onFilterChange(activeFilter === id ? "all" : id);
   }
 

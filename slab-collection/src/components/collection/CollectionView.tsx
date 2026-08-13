@@ -13,13 +13,15 @@ import { SetupPrompt } from "@/components/collection/SetupPrompt";
 import { SummaryBar } from "@/components/collection/SummaryBar";
 import { formatApiDetail } from "@/lib/api-errors";
 import {
-  filterByCategory,
   ownedCountByCardUuid,
-  type CollectionCategoryFilter,
+  type CollectionBrowseMode,
+  type CollectionFilter,
 } from "@/lib/collection-filters";
+import { CollectionBrowseTabs } from "@/components/collection/CollectionBrowseTabs";
 import {
   collectionFetchKey,
   collectionParams,
+  groupFilterParams,
   groupKindFor,
   TEAM_PLAYERS_SORT,
   usesServerPaging,
@@ -65,7 +67,9 @@ export function CollectionView() {
   const [submittedQuery, setSubmittedQuery] = useState("");
   const [sort, setSort] = useState<CollectionSortOption>("value_desc");
   const [view, setView] = useState<ViewMode>("grid");
-  const [category, setCategory] = useState<CollectionCategoryFilter>("all");
+  // Two independent axes: what you're looking at, and what's been narrowed out of it.
+  const [browse, setBrowse] = useState<CollectionBrowseMode>("cards");
+  const [filter, setFilter] = useState<CollectionFilter>("all");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [result, setResult] = useState<CollectionResult | null>(null);
   const [groups, setGroups] = useState<GroupResult<unknown> | null>(null);
@@ -82,21 +86,21 @@ export function CollectionView() {
     }
   }, []);
 
-  // Three shapes of request, decided by the category and sort (see collection-paging):
+  // Three shapes of request, decided by the browse mode and sort (see collection-paging):
   //   grouped   -> its own endpoint, which rolls up and pages the GROUPS
   //   paged     -> one page of copies, filtered and ordered by the API
   //   full load -> everything, for the two sorts the API can't express
-  const groupKind = groupKindFor(category);
-  const paged = usesServerPaging(category, sort);
+  const groupKind = groupKindFor(browse);
+  const paged = usesServerPaging(browse, sort);
   const fetchKey = groupKind
-    ? `group|${groupKind}|${groupSort}|${submittedQuery}`
-    : collectionFetchKey(category, sort, submittedQuery);
+    ? `group|${groupKind}|${filter}|${groupSort}|${submittedQuery}`
+    : collectionFetchKey(filter, sort, submittedQuery);
 
   const fetchPage = useCallback(
     async (offset: number | null): Promise<CollectionResult | null> => {
       const params = collectionParams({
         search: submittedQuery || undefined,
-        category,
+        filter,
         sort,
         offset,
       });
@@ -117,7 +121,7 @@ export function CollectionView() {
       setNeedsSetup(false);
       return (await response.json()) as CollectionResult;
     },
-    [category, sort, submittedQuery],
+    [filter, sort, submittedQuery],
   );
 
   const fetchGroups = useCallback(async (): Promise<GroupResult<unknown> | null> => {
@@ -128,6 +132,9 @@ export function CollectionView() {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         q: submittedQuery || undefined,
+        // The filter narrows the copies BEFORE they're rolled up, so "rookies, by set" is one
+        // request rather than a set list the browser has to re-filter.
+        ...groupFilterParams(filter),
         // "Most players" is ordered in the teams view itself; the server has no such key, so ask
         // for the nearest thing and let that view refine it.
         group_sort: groupSort === TEAM_PLAYERS_SORT ? "-copies" : groupSort,
@@ -148,7 +155,7 @@ export function CollectionView() {
 
     setNeedsSetup(false);
     return (await response.json()) as GroupResult<unknown>;
-  }, [groupKind, groupSort, submittedQuery]);
+  }, [filter, groupKind, groupSort, submittedQuery]);
 
   const loadCollection = useCallback(() => {
     startTransition(async () => {
@@ -223,8 +230,8 @@ export function CollectionView() {
     // A paged response is already filtered and ordered by the API. Re-sorting it here would only
     // reorder the rows that happen to be loaded, which is worse than leaving it alone.
     if (paged) return loaded;
-    return sortCollectionCopies(filterByCategory(loaded, category), sort);
-  }, [result?.items, sort, category, paged]);
+    return sortCollectionCopies(loaded, sort);
+  }, [result?.items, sort, paged]);
 
   const loadedCount = result?.items?.length ?? 0;
   const hasMore = paged && loadedCount < (result?.total ?? 0);
@@ -243,17 +250,15 @@ export function CollectionView() {
   // For a grouped view this is the number of groups, which is what those views label.
   const displayTotal = groupKind
     ? (groups?.total ?? 0)
-    : paged || category === "all"
+    : paged
       ? (result?.total ?? 0)
       : items.length;
 
   const highlightCardNumber =
     sort === "card_number_asc" || sort === "card_number_desc";
 
-  const showViewToggle =
-    category !== "teams" &&
-    category !== "by_set" &&
-    category !== "duplicates";
+  // Grid/list is a card-layout choice; the grouped views render their own shapes.
+  const showViewToggle = browse === "cards";
 
   // Each handler only moves state; the effect above decides whether that state change actually
   // needs a new request. Previously these fired a fetch AND changed state, which refetched twice.
@@ -266,8 +271,12 @@ export function CollectionView() {
     setSort(nextSort);
   }
 
-  function handleCategoryChange(nextCategory: CollectionCategoryFilter) {
-    setCategory(nextCategory);
+  function handleFilterChange(nextFilter: CollectionFilter) {
+    setFilter(nextFilter);
+  }
+
+  function handleBrowseChange(nextBrowse: CollectionBrowseMode) {
+    setBrowse(nextBrowse);
   }
 
   if (needsSetup) {
@@ -299,7 +308,7 @@ export function CollectionView() {
           className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm text-slate-200"
         >
           Filters & sort
-          {category !== "all" ? (
+          {filter !== "all" ? (
             <span className="ml-2 text-sky-400">· filtered</span>
           ) : null}
         </button>
@@ -359,11 +368,11 @@ export function CollectionView() {
         onSortChange={handleSortChange}
         view={view}
         onViewChange={setView}
-        category={category}
-        onCategoryChange={handleCategoryChange}
+        browse={browse}
+        onBrowseChange={handleBrowseChange}
+        filter={filter}
+        onFilterChange={handleFilterChange}
         stats={stats}
-        setCount={uniqueSetCount}
-        duplicateCount={duplicateCount}
         isPending={isPending}
         showViewToggle={showViewToggle}
       />
@@ -378,14 +387,23 @@ export function CollectionView() {
         <>
           <SummaryBar summary={result?.summary} total={displayTotal} />
 
-          <div className="hidden md:block">
+          <div className="hidden space-y-3 md:block">
+            <CollectionBrowseTabs
+              value={browse}
+              onChange={handleBrowseChange}
+              counts={{
+                cards: stats?.total_cards,
+                sets: uniqueSetCount,
+                teams: stats?.teams,
+                duplicates: duplicateCount,
+              }}
+              disabled={isPending}
+            />
             <CollectionFilterStats
               stats={stats}
-              activeFilter={category}
-              onFilterChange={handleCategoryChange}
+              activeFilter={filter}
+              onFilterChange={handleFilterChange}
               isPending={isPending}
-              setCount={uniqueSetCount}
-              duplicateCount={duplicateCount}
             />
           </div>
 
@@ -434,7 +452,7 @@ export function CollectionView() {
             )
           ) : (
             <div className="rounded-xl border border-dashed border-slate-700 px-6 py-16 text-center text-slate-400">
-              {category === "all"
+              {filter === "all"
                 ? "No cards found. Try a different search or sort."
                 : "No cards match this filter."}
             </div>

@@ -1,7 +1,10 @@
 "use client";
 
 import { sheenClass, SheenBar, SheenContent } from "@/components/ui/sheen";
-import type { CollectionCategoryFilter } from "@/lib/collection-filters";
+import type {
+  CollectionBrowseMode,
+  CollectionFilter,
+} from "@/lib/collection-filters";
 import type { CollectionSortOption } from "@/lib/collection-sort";
 import type { DashboardStats } from "@/lib/slab/types";
 
@@ -12,38 +15,34 @@ interface CollectionFilterSheetProps {
   onSortChange: (sort: CollectionSortOption) => void;
   view: "grid" | "list";
   onViewChange: (view: "grid" | "list") => void;
-  category: CollectionCategoryFilter;
-  onCategoryChange: (category: CollectionCategoryFilter) => void;
+  browse: CollectionBrowseMode;
+  onBrowseChange: (mode: CollectionBrowseMode) => void;
+  filter: CollectionFilter;
+  onFilterChange: (filter: CollectionFilter) => void;
   stats: DashboardStats | null;
-  setCount?: number;
-  duplicateCount?: number;
   isPending?: boolean;
   showViewToggle?: boolean;
 }
 
-const FILTER_OPTIONS: {
-  id: CollectionCategoryFilter;
-  label: string;
-  // undefined = not known yet, which renders as the loading animation. It must NOT fall back to
-  // 0: a confident "Autos 0" on a collection full of autos is worse than admitting we're loading.
-  value: (props: {
-    stats: DashboardStats | null;
-    setCount?: number;
-    duplicateCount?: number;
-  }) => number | undefined;
-}[] = [
-  { id: "all", label: "All cards", value: () => 0 },
-  { id: "auto", label: "Autos", value: ({ stats }) => stats?.autos },
-  { id: "rookie", label: "Rookies", value: ({ stats }) => stats?.rookies },
-  { id: "numbered", label: "Numbered", value: ({ stats }) => stats?.numbered },
-  { id: "teams", label: "Teams", value: ({ stats }) => stats?.teams },
-  { id: "by_set", label: "Sets", value: ({ setCount }) => setCount },
-  {
-    id: "duplicates",
-    label: "Duplicates",
-    value: ({ duplicateCount }) => duplicateCount,
-  },
+const BROWSE_OPTIONS: { id: CollectionBrowseMode; label: string }[] = [
+  { id: "cards", label: "Cards" },
+  { id: "sets", label: "Sets" },
+  { id: "teams", label: "Teams" },
+  { id: "duplicates", label: "Duplicates" },
 ];
+
+// undefined = not known yet, which renders as the loading sheen. It must NOT fall back to 0: a
+// confident "Autos 0" on a collection full of autos is worse than admitting we're loading.
+const FILTER_OPTIONS: {
+  id: CollectionFilter;
+  label: string;
+  value: (stats: DashboardStats | null) => number | undefined;
+}[] = [
+  { id: "auto", label: "Autos", value: (stats) => stats?.autos },
+  { id: "rookie", label: "Rookies", value: (stats) => stats?.rookies },
+  { id: "numbered", label: "Numbered", value: (stats) => stats?.numbered },
+];
+
 
 export function CollectionFilterSheet({
   open,
@@ -52,17 +51,15 @@ export function CollectionFilterSheet({
   onSortChange,
   view,
   onViewChange,
-  category,
-  onCategoryChange,
+  browse,
+  onBrowseChange,
+  filter,
+  onFilterChange,
   stats,
-  setCount,
-  duplicateCount,
   isPending = false,
   showViewToggle = true,
 }: CollectionFilterSheetProps) {
   if (!open) return null;
-
-  const metricProps = { stats, setCount, duplicateCount };
 
   return (
     <>
@@ -121,14 +118,32 @@ export function CollectionFilterSheet({
           ) : null}
 
           <div>
-            <p className="text-sm text-slate-400">Browse by type</p>
+            <p className="text-sm text-slate-400">Browse</p>
+            <p className="text-xs text-slate-500">
+              How your collection is shown. Filters below apply inside it.
+            </p>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              {BROWSE_OPTIONS.map((option) => (
+                <FilterChip
+                  key={option.id}
+                  active={browse === option.id}
+                  onClick={() => {
+                    onBrowseChange(option.id);
+                    onClose();
+                  }}
+                  label={option.label}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-sm text-slate-400">Filter</p>
             <div className="mt-2 grid grid-cols-2 gap-2">
               {FILTER_OPTIONS.map((option) => {
-                const active = category === option.id;
-                const count =
-                  option.id === "all" ? undefined : option.value(metricProps);
-                // "All cards" never carries a count, so it isn't waiting on anything.
-                const loading = count === undefined && option.id !== "all";
+                const active = filter === option.id;
+                const count = option.value(stats);
+                const loading = count === undefined;
 
                 return (
                   <button
@@ -136,8 +151,9 @@ export function CollectionFilterSheet({
                     type="button"
                     disabled={isPending}
                     aria-busy={loading}
+                    aria-pressed={active}
                     onClick={() => {
-                      onCategoryChange(option.id);
+                      onFilterChange(active ? "all" : option.id);
                       onClose();
                     }}
                     className={`rounded-xl border px-3 py-3 text-left disabled:opacity-60 ${sheenClass(
@@ -150,9 +166,7 @@ export function CollectionFilterSheet({
                   >
                     <SheenContent>
                       <span className="block text-sm text-white">{option.label}</span>
-                      {count !== undefined ? (
-                        <span className="mt-1 block text-xs text-slate-500">{count}</span>
-                      ) : loading ? (
+                      {loading ? (
                         <>
                           <span className="sr-only">
                             Counting {option.label.toLowerCase()}
@@ -161,7 +175,9 @@ export function CollectionFilterSheet({
                             <SheenBar className="h-2.5 w-10" />
                           </span>
                         </>
-                      ) : null}
+                      ) : (
+                        <span className="mt-1 block text-xs text-slate-500">{count}</span>
+                      )}
                     </SheenContent>
                   </button>
                 );
