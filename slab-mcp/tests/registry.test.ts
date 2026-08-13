@@ -11,6 +11,7 @@
  */
 
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { describe, it } from 'node:test';
 import { z } from 'zod';
 
@@ -151,6 +152,19 @@ describe('resources and prompts', () => {
       assert.ok(rendered.length > 50, `${prompt.name} renders empty`);
       assert.ok(!rendered.includes('undefined'), `${prompt.name} leaks "undefined" when an optional arg is omitted`);
     }
+  });
+});
+
+describe('version', () => {
+  it('reports the version in package.json', async () => {
+    // The version goes out in the MCP initialize handshake and shows in every
+    // client's server list. Hardcoding it shipped 0.1.2 introducing itself as
+    // 0.1.0; this test is what stops that recurring.
+    const { VERSION } = await import('../src/version.js');
+    const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')) as {
+      version: string;
+    };
+    assert.equal(VERSION, pkg.version);
   });
 });
 

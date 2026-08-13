@@ -22,8 +22,7 @@ import { ConfigError } from './errors.js';
 import { registerPrompts } from './prompts/index.js';
 import { registerResources } from './resources/index.js';
 import { registerTools } from './tools/index.js';
-
-const VERSION = '0.1.0';
+import { VERSION } from './version.js';
 
 /** stderr only — see the note above. */
 function log(message: string): void {
