@@ -1,0 +1,113 @@
+# Publish slab-mcp to npm.
+#
+# THE FILENAME IS LOAD-BEARING. npm's trusted publisher config for this package
+# is bound to `slab-mcp-publish.yml` — filename only, and it must sit directly
+# in .github/workflows/. Renaming or moving this file breaks publishing with an
+# auth error that never mentions the filename; change the npm side first.
+#
+# One publish workflow per tool, matching the one-directory-one-tool rule in
+# CONTRIBUTING.md: a new publishable tool gets its own `<tool>-publish.yml` and
+# its own trusted publisher on npmjs.com, and nothing here needs to change.
+#
+# AUTH: nothing stored. This uses npm trusted publishing (OIDC) — the job mints
+# a short-lived identity token, npm verifies it came from this repo, this
+# workflow filename, and this environment, then issues a credential good for
+# exactly one publish. There is no NPM_TOKEN to leak from a fork, a malicious
+# PR, or a compromised action, and npm attaches a provenance attestation
+# automatically so anyone can verify the tarball was built from this commit.
+#
+# npm side (already configured):
+#   dev-jeb/slab-community -> slab-mcp-publish.yml -> env npm-publish -> npm publish
+#
+# All four must agree. The `environment: npm-publish` below is what puts the
+# environment claim in the OIDC token; remove it and npm rejects the publish.
+#
+# REMAINING SETUP:
+#   - OIDC cannot perform a package's FIRST publish (npm requires the package to
+#     exist before a trusted publisher can be attached), so run
+#     `cd slab-mcp && npm publish` once by hand as the package owner.
+#   - GitHub -> Settings -> Environments -> npm-publish -> add yourself as a
+#     required reviewer, so every release pauses for a human click and a tag
+#     pushed by mistake cannot ship on its own.
+#
+# TO RELEASE: bump "version" in slab-mcp/package.json, commit, then
+#   git tag slab-mcp-v0.1.1 && git push origin slab-mcp-v0.1.1
+name: slab-mcp publish
+
+on:
+  push:
+    tags: ['slab-mcp-v*']
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: slab-mcp
+
+jobs:
+  # Runs WITHOUT id-token, so nothing in the test/build path can mint a
+  # publish credential.
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: slab-mcp/package-lock.json
+
+      - run: npm ci
+
+      # Publishing a broken build is worse than not publishing.
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+      # npm never allows a version number to be reused, so shipping the wrong
+      # one under the right name is unfixable. Catch it before it publishes.
+      - name: Tag must match package.json version
+        run: |
+          set -euo pipefail
+          TAG_VERSION="${GITHUB_REF_NAME#slab-mcp-v}"
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME implies version $TAG_VERSION but package.json says $PKG_VERSION."
+            exit 1
+          fi
+          echo "Publishing slab-mcp@$PKG_VERSION"
+
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    # Must match the Environment name in npm's trusted publisher config — this
+    # is what adds the environment claim to the OIDC token. It is also the
+    # hook for GitHub's required-reviewer protection.
+    environment: npm-publish
+    permissions:
+      contents: read
+      id-token: write # lets the job mint the OIDC token npm exchanges for a credential
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22' # trusted publishing needs Node >= 22.14
+          registry-url: 'https://registry.npmjs.org'
+          cache: npm
+          cache-dependency-path: slab-mcp/package-lock.json
+
+      # Trusted publishing needs npm >= 11.5.1, newer than what ships with Node 22.
+      - run: npm install -g npm@latest
+
+      # --ignore-scripts matters in THIS job specifically: `id-token: write` is
+      # live here, so any code that runs could request an OIDC token, and
+      # dependency install scripts are the classic way such code gets in.
+      # Nothing slab-mcp depends on needs them, and the build below is our own tsc.
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+
+      # No NODE_AUTH_TOKEN / NPM_TOKEN: the CLI detects the OIDC environment and
+      # authenticates with it. Provenance is attached automatically.
+      - run: npm publish

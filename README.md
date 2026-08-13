@@ -34,6 +34,7 @@ directories turns one person's Tuesday refactor into everyone else's problem.
 | Directory | What it is | Stack | Maintainer |
 | --- | --- | --- | --- |
 | [`slab-collection/`](slab-collection/) | Web front end for your collection — gallery, portfolio dashboard, player research, per-card pricing | Next.js, React, Tailwind | [@Tdtemplev](https://github.com/Tdtemplev) |
+| [`slab-mcp/`](slab-mcp/) | Local MCP server — gives an AI agent (Claude Code, Claude Desktop, Cursor…) tools to search the catalog, read pricing, and manage a collection | TypeScript, Node | [@dev-jeb](https://github.com/dev-jeb) |
 
 ## Before you build
 

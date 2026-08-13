@@ -1,0 +1,53 @@
+{
+  "name": "slab-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for the slab trading-card API — lets a local AI agent search the catalog, read pricing, and manage a collection.",
+  "license": "MIT",
+  "type": "module",
+  "keywords": [
+    "mcp",
+    "modelcontextprotocol",
+    "slab",
+    "trading-cards",
+    "hockey-cards",
+    "ai-agent"
+  ],
+  "homepage": "https://github.com/dev-jeb/slab-community/tree/main/slab-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/dev-jeb/slab-community/issues"
+  },
+  "//repository": "Required for npm provenance — the attestation links the published tarball to this exact repo and directory, and npm rejects a mismatch.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dev-jeb/slab-community.git",
+    "directory": "slab-mcp"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "slab-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "^2.0.0",
+    "zod": "^4.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "tsx": "^4.19.0",
+    "typescript": "^5"
+  }
+}
