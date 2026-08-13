@@ -46,6 +46,14 @@ import type { DashboardStats } from "@/lib/slab/types";
 
 type ViewMode = "grid" | "list";
 
+/** What the first summary stat is counting — groups in a grouped view, copies in Cards. */
+const TOTAL_LABELS: Record<CollectionBrowseMode, string> = {
+  cards: "Cards shown",
+  sets: "Sets shown",
+  teams: "Teams shown",
+  duplicates: "Duplicates shown",
+};
+
 function isMobileViewport(): boolean {
   return typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
 }
@@ -357,6 +365,7 @@ export function CollectionView() {
           <SummaryBar
             summary={result?.summary}
             total={awaitingData ? undefined : displayTotal}
+            totalLabel={TOTAL_LABELS[browse]}
           />
 
           {/* One control band: what you're searching and sorting on the left, what you're
@@ -393,20 +402,23 @@ export function CollectionView() {
                   onGroupSortChange={setGroupSort}
                 />
 
-                {showViewToggle ? (
-                  <div className="flex gap-2">
-                    <ViewToggle
-                      active={view === "grid"}
-                      onClick={() => setView("grid")}
-                      label="Grid"
-                    />
-                    <ViewToggle
-                      active={view === "list"}
-                      onClick={() => setView("list")}
-                      label="List"
-                    />
-                  </div>
-                ) : null}
+                {/* Kept in the layout when it doesn't apply, just hidden. Unmounting it made
+                    the row reflow every time you switched between Cards and a grouped view. */}
+                <div
+                  className={`flex gap-2 ${showViewToggle ? "" : "invisible"}`}
+                  aria-hidden={!showViewToggle}
+                >
+                  <ViewToggle
+                    active={view === "grid"}
+                    onClick={() => setView("grid")}
+                    label="Grid"
+                  />
+                  <ViewToggle
+                    active={view === "list"}
+                    onClick={() => setView("list")}
+                    label="List"
+                  />
+                </div>
               </div>
             </form>
 

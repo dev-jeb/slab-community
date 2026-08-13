@@ -61,6 +61,9 @@ export function CollectionSortSelect({
   return (
     <label className="flex items-center gap-2 text-sm text-slate-400">
       <span>Sort</span>
+      {/* Fixed width, sized to the longest option, so the toolbar geometry is identical in every
+          view. Left to auto, "Last name (A–Z)" and "Most cards" render at different widths and
+          shift everything beside them on each switch. */}
       <select
         value={grouped ? groupSort : cardSort}
         onChange={(event) => {
@@ -68,7 +71,7 @@ export function CollectionSortSelect({
           if (grouped) onGroupSortChange(next as GroupSortOption);
           else onCardSortChange(next as CollectionSortOption);
         }}
-        className="rounded-lg border border-slate-800 bg-slate-950 px-2 py-1.5 text-sm text-white"
+        className="w-44 rounded-lg border border-slate-800 bg-slate-950 px-2 py-1.5 text-sm text-white"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>

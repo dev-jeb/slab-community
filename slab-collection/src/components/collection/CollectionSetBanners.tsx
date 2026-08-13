@@ -102,11 +102,6 @@ export function CollectionSetBanners({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-slate-400">
-          {groups.length} set{groups.length === 1 ? "" : "s"} in your collection
-        </p>
-      </div>
 
       <div className="space-y-3">
         {groups.map((group) => {

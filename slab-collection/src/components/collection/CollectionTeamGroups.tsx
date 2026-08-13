@@ -176,11 +176,6 @@ export function CollectionTeamGroups({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-slate-400">
-          {groups.length} team{groups.length === 1 ? "" : "s"} in your collection
-        </p>
-      </div>
 
       <div className="grid items-start gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
       {groups.map((group, index) => {
