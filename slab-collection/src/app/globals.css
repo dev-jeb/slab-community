@@ -21,3 +21,51 @@ body {
 code {
   font-family: var(--font-geist-mono), ui-monospace, monospace;
 }
+
+/* Loading sheen — a soft highlight sweeping left to right across a card while its number is still
+   in flight. Deliberately quiet: it reads as "this is still settling", not as a spinner demanding
+   attention, and it animates a transform rather than layout so it costs nothing to run on a grid
+   of chips.
+
+   `.sheen` is the clipping frame; `.sheen::after` is the moving highlight. The parent needs its
+   own stacking context (position: relative) and the content above it needs one too, or the
+   highlight paints over the label. */
+@keyframes sheen-sweep {
+  from {
+    transform: translateX(-120%);
+  }
+  to {
+    transform: translateX(220%);
+  }
+}
+
+.sheen {
+  position: relative;
+  overflow: hidden;
+}
+
+.sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 45%;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgba(148, 197, 253, 0.06) 35%,
+    rgba(186, 230, 253, 0.12) 50%,
+    rgba(148, 197, 253, 0.06) 65%,
+    transparent 100%
+  );
+  animation: sheen-sweep 1.9s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* A repeating sweep is exactly the kind of motion this setting is for. The placeholder bar stays,
+   so the "still loading" signal survives without anything moving. */
+@media (prefers-reduced-motion: reduce) {
+  .sheen::after {
+    animation: none;
+    opacity: 0;
+  }
+}

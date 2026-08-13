@@ -1,16 +1,7 @@
-import { SkateLoader } from "@/components/collection/SkateLoader";
+import { sheenClass, SheenContent } from "@/components/ui/sheen";
 import type { CollectionCategoryFilter } from "@/lib/collection-filters";
 import type { DashboardStats } from "@/lib/slab/types";
 
-const FILTER_LABELS: Record<CollectionCategoryFilter, string> = {
-  all: "All cards",
-  auto: "Autos",
-  rookie: "Rookies",
-  numbered: "Numbered",
-  teams: "Team cards",
-  by_set: "Sets",
-  duplicates: "Duplicates",
-};
 
 interface CollectionFilterStatsProps {
   stats: DashboardStats | null;
@@ -77,64 +68,68 @@ export function CollectionFilterStats({
   }
 
   return (
-    <section className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-medium text-white">Browse by type</h2>
-          <p className="text-xs text-slate-500">
-            Click a stat to filter your collection
-            {activeFilter !== "all" ? (
-              <span className="text-sky-400">
-                {" "}
-                · showing {FILTER_LABELS[activeFilter].toLowerCase()}
-              </span>
-            ) : null}
-          </p>
-        </div>
-        {activeFilter !== "all" ? (
-          <button
-            type="button"
-            onClick={() => onFilterChange("all")}
-            className="text-sm text-sky-400 transition hover:text-sky-300"
-          >
-            Clear filter
-          </button>
-        ) : null}
-      </div>
+    <section className="flex flex-wrap items-center gap-2">
+      {/* Filters are pills, not cards, on purpose: the portfolio stats above are cards, and two
+          grids of similar boxes read as one wall of numbers. A different shape says "these do
+          something" and costs a fraction of the vertical space, which is what was pushing the
+          actual cards below the fold. */}
+      <span className="mr-1 text-xs uppercase tracking-wider text-slate-500">
+        Filter
+      </span>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        {items.map((item) => {
-          const active = activeFilter === item.id;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => handleClick(item.id)}
-              disabled={isPending}
-              className={`rounded-xl border px-4 py-3 text-left transition disabled:opacity-60 ${
-                active
-                  ? "border-sky-400/50 bg-sky-400/10"
-                  : "border-slate-800 bg-slate-900/50 hover:border-slate-600 hover:bg-slate-900/80"
+      {items.map((item) => {
+        const active = activeFilter === item.id;
+        const loading = item.value === undefined;
+
+        return (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => handleClick(item.id)}
+            disabled={isPending}
+            aria-busy={loading}
+            aria-pressed={active}
+            title={item.hint}
+            className={`inline-flex items-center gap-2 rounded-full border py-1.5 pl-3 pr-2 text-sm transition disabled:opacity-60 ${sheenClass(
+              loading,
+            )} ${
+              active
+                ? "border-sky-400/60 bg-sky-400/10 text-sky-100"
+                : "border-slate-800 bg-slate-900/60 text-slate-300 hover:border-slate-600 hover:bg-slate-900"
+            }`}
+          >
+            <SheenContent block={false}>{item.label}</SheenContent>
+            <SheenContent
+              block={false}
+              className={`min-w-[1.75rem] rounded-full px-1.5 py-0.5 text-xs font-semibold tabular-nums ${
+                active ? "bg-sky-400/20 text-sky-100" : "bg-slate-800 text-white"
               }`}
             >
-              <p className="text-[11px] uppercase tracking-wider text-slate-500">
-                {item.label}
-              </p>
-              <p className="mt-1 text-2xl font-semibold text-white">
-                {item.value ?? (
-                  <SkateLoader
-                    label={`Counting ${item.label.toLowerCase()}`}
-                    className="text-lg"
-                  />
-                )}
-              </p>
-              {item.hint ? (
-                <p className="mt-1 text-xs text-slate-500">{item.hint}</p>
-              ) : null}
-            </button>
-          );
-        })}
-      </div>
+              {loading ? (
+                <>
+                  <span className="sr-only">
+                    Counting {item.label.toLowerCase()}
+                  </span>
+                  {/* Holds the badge's width so the pill doesn't jump when the number lands. */}
+                  <span aria-hidden="true">&nbsp;</span>
+                </>
+              ) : (
+                item.value
+              )}
+            </SheenContent>
+          </button>
+        );
+      })}
+
+      {activeFilter !== "all" ? (
+        <button
+          type="button"
+          onClick={() => onFilterChange("all")}
+          className="ml-1 text-sm text-sky-400 transition hover:text-sky-300"
+        >
+          Clear
+        </button>
+      ) : null}
     </section>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { SkateLoader } from "@/components/collection/SkateLoader";
+import { sheenClass, SheenBar, SheenContent } from "@/components/ui/sheen";
 import type { CollectionCategoryFilter } from "@/lib/collection-filters";
 import type { CollectionSortOption } from "@/lib/collection-sort";
 import type { DashboardStats } from "@/lib/slab/types";
@@ -127,30 +127,42 @@ export function CollectionFilterSheet({
                 const active = category === option.id;
                 const count =
                   option.id === "all" ? undefined : option.value(metricProps);
+                // "All cards" never carries a count, so it isn't waiting on anything.
+                const loading = count === undefined && option.id !== "all";
 
                 return (
                   <button
                     key={option.id}
                     type="button"
                     disabled={isPending}
+                    aria-busy={loading}
                     onClick={() => {
                       onCategoryChange(option.id);
                       onClose();
                     }}
-                    className={`rounded-xl border px-3 py-3 text-left disabled:opacity-60 ${
+                    className={`rounded-xl border px-3 py-3 text-left disabled:opacity-60 ${sheenClass(
+                      loading,
+                    )} ${
                       active
                         ? "border-sky-400/50 bg-sky-400/10"
                         : "border-slate-800 bg-slate-900/60"
                     }`}
                   >
-                    <p className="text-sm text-white">{option.label}</p>
-                    {count !== undefined ? (
-                      <p className="mt-1 text-xs text-slate-500">{count}</p>
-                    ) : option.id !== "all" ? (
-                      <p className="mt-1 text-xs">
-                        <SkateLoader label={`Counting ${option.label.toLowerCase()}`} />
-                      </p>
-                    ) : null}
+                    <SheenContent>
+                      <span className="block text-sm text-white">{option.label}</span>
+                      {count !== undefined ? (
+                        <span className="mt-1 block text-xs text-slate-500">{count}</span>
+                      ) : loading ? (
+                        <>
+                          <span className="sr-only">
+                            Counting {option.label.toLowerCase()}
+                          </span>
+                          <span className="mt-1.5 mb-0.5 block">
+                            <SheenBar className="h-2.5 w-10" />
+                          </span>
+                        </>
+                      ) : null}
+                    </SheenContent>
                   </button>
                 );
               })}
