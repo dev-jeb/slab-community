@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
 
 import { SetupPrompt } from "@/components/collection/SetupPrompt";
 import { PlayerAvatar, primarySubjectName } from "@/components/collection/PlayerAvatar";
+import { gainTone as sharedGainTone } from "@/components/ui/StatCard";
 import {
   formatListingNotes,
   parseAskAmount,
@@ -28,12 +29,12 @@ import type { CardCopyOut, CardCopyUpdate } from "@/lib/slab/types";
 
 type SalesTab = "for_sale" | "sold";
 
+/**
+ * Denser surface than a stat card, so flat/unknown rests dimmer than the shared default. The
+ * gain/loss logic itself is shared — it was copied into three files and had already drifted.
+ */
 function gainTone(value?: string | null): string {
-  if (!value) return "text-slate-400";
-  const num = Number(value);
-  if (num > 0) return "text-emerald-400";
-  if (num < 0) return "text-rose-400";
-  return "text-slate-400";
+  return sharedGainTone(value, "text-slate-400");
 }
 
 function SummaryCard({

@@ -387,7 +387,9 @@ export function CollectionView() {
         <>
           <SummaryBar summary={result?.summary} total={displayTotal} />
 
-          <div className="hidden space-y-3 md:block">
+          {/* Right-aligned and content-width: these are controls, not headers. Full-bleed bars
+              read as section chrome and swallow the space the cards want. */}
+          <div className="hidden flex-col items-end gap-2 md:flex">
             <CollectionBrowseTabs
               value={browse}
               onChange={handleBrowseChange}

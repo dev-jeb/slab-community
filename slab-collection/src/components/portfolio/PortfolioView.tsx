@@ -6,6 +6,8 @@ import { Suspense, useCallback, useEffect, useState, useTransition } from "react
 import { SetupPrompt } from "@/components/collection/SetupPrompt";
 import { PortfolioChart } from "@/components/portfolio/PortfolioChart";
 import { SalesView } from "@/components/sales/SalesView";
+import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
+import { gainTone, StatCard, StatGrid } from "@/components/ui/StatCard";
 import {
   formatCurrency,
   formatPercent,
@@ -80,16 +82,15 @@ function PortfolioContent() {
 
   return (
     <div className="space-y-6">
-      <div className="flex rounded-lg border border-slate-800 bg-slate-950/60 p-1">
-        <TabButton
-          active={tab === "overview"}
-          onClick={() => setTab("overview")}
-          label="Portfolio"
-        />
-        <TabButton
-          active={tab === "sales"}
-          onClick={() => setTab("sales")}
-          label="Sales"
+      <div className="flex justify-end">
+        <SegmentedTabs
+          tabs={[
+            { id: "overview", label: "Portfolio", hint: "Value, cost basis, and history" },
+            { id: "sales", label: "Sales", hint: "Cards you've sold and what you realised" },
+          ]}
+          value={tab}
+          onChange={setTab}
+          ariaLabel="Portfolio section"
         />
       </div>
 
@@ -98,16 +99,18 @@ function PortfolioContent() {
       ) : (
         <div className="space-y-8">
           {isPending && !dashboard ? (
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              {Array.from({ length: 4 }).map((_, index) => (
-                <div key={index} className="h-24 animate-pulse rounded-xl bg-slate-900" />
-              ))}
-            </div>
+            <StatGrid>
+              {["Portfolio value", "Cost basis", "Unrealized P&L", "ROI", "Total cards", "Priced coverage"].map(
+                (label) => (
+                  <StatCard key={label} label={label} value="" loading />
+                ),
+              )}
+            </StatGrid>
           ) : null}
 
           {dashboard ? (
             <>
-              <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <StatGrid>
                 <StatCard
                   label="Portfolio value"
                   value={formatCurrency(dashboard.portfolio_value)}
@@ -119,25 +122,24 @@ function PortfolioContent() {
                 <StatCard
                   label="Unrealized P&L"
                   value={formatSignedCurrency(dashboard.total_unrealized_gain_loss)}
+                  tone={gainTone(dashboard.total_unrealized_gain_loss)}
                 />
                 <StatCard
                   label="ROI"
                   value={formatPercent(dashboard.portfolio_roi)}
+                  tone={gainTone(dashboard.portfolio_roi)}
                   hint={
                     dashboard.portfolio_change_7d
-                      ? `7d change ${formatSignedCurrency(dashboard.portfolio_change_7d)}`
+                      ? `7d ${formatSignedCurrency(dashboard.portfolio_change_7d)}`
                       : undefined
                   }
                 />
-              </section>
-
-              <section className="grid gap-4 sm:grid-cols-2">
                 <StatCard label="Total cards" value={String(dashboard.total_cards ?? 0)} />
                 <StatCard
                   label="Priced coverage"
                   value={formatPercent(dashboard.priced_coverage)}
                 />
-              </section>
+              </StatGrid>
 
               <PortfolioChart points={chartPoints} />
 
@@ -228,44 +230,4 @@ export function PortfolioView() {
   );
 }
 
-function TabButton({
-  active,
-  onClick,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
-        active
-          ? "bg-sky-600 text-white"
-          : "text-slate-400 hover:text-slate-200"
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
 
-function StatCard({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-}) {
-  return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-3">
-      <p className="text-[11px] uppercase tracking-wider text-slate-500">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-white">{value}</p>
-      {hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
-    </div>
-  );
-}
