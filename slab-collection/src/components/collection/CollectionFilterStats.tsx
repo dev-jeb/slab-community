@@ -23,7 +23,8 @@ interface CollectionFilterStatsProps {
 interface StatItem {
   id: CollectionCategoryFilter;
   label: string;
-  value: number;
+  /** undefined when the count isn't known — the chip still navigates, it just doesn't claim a number. */
+  value: number | undefined;
   hint?: string;
 }
 
@@ -48,13 +49,13 @@ function buildStatItems(
     {
       id: "by_set",
       label: "Sets",
-      value: setCount ?? 0,
+      value: setCount,
       hint: "Browse by product",
     },
     {
       id: "duplicates",
       label: "Duplicates",
-      value: duplicateCount ?? 0,
+      value: duplicateCount,
       hint: "Multiple copies",
     },
   ];
@@ -118,7 +119,9 @@ export function CollectionFilterStats({
               <p className="text-[11px] uppercase tracking-wider text-slate-500">
                 {item.label}
               </p>
-              <p className="mt-1 text-2xl font-semibold text-white">{item.value}</p>
+              <p className="mt-1 text-2xl font-semibold text-white">
+                {item.value ?? <span className="text-slate-600">—</span>}
+              </p>
               {item.hint ? (
                 <p className="mt-1 text-xs text-slate-500">{item.hint}</p>
               ) : null}

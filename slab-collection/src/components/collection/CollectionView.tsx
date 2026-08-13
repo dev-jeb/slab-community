@@ -13,19 +13,23 @@ import { SetupPrompt } from "@/components/collection/SetupPrompt";
 import { SummaryBar } from "@/components/collection/SummaryBar";
 import { formatApiDetail } from "@/lib/api-errors";
 import {
-  categoryQueryParams,
   countDuplicateCards,
   filterByCategory,
   ownedCountByCardUuid,
   type CollectionCategoryFilter,
 } from "@/lib/collection-filters";
+import {
+  collectionFetchKey,
+  collectionParams,
+  usesServerPaging,
+} from "@/lib/collection-paging";
 import { primarySubjectName } from "@/lib/names";
 import { prefetchPlayerImages } from "@/lib/player-image-cache";
 import {
   sortCollectionCopies,
   type CollectionSortOption,
 } from "@/lib/collection-sort";
-import type { CardCopyOut, CollectionResult, DashboardStats } from "@/lib/slab/types";
+import type { CollectionResult, DashboardStats } from "@/lib/slab/types";
 
 type ViewMode = "grid" | "list";
 
@@ -49,6 +53,7 @@ function useIsMobile(): boolean {
 
 export function CollectionView() {
   const [query, setQuery] = useState("");
+  const [submittedQuery, setSubmittedQuery] = useState("");
   const [sort, setSort] = useState<CollectionSortOption>("value_desc");
   const [view, setView] = useState<ViewMode>("grid");
   const [category, setCategory] = useState<CollectionCategoryFilter>("all");
@@ -66,45 +71,69 @@ export function CollectionView() {
     }
   }, []);
 
-  const loadCollection = useCallback(
-    (
-      search?: string,
-      nextCategory?: CollectionCategoryFilter,
-    ) => {
-      startTransition(async () => {
-        setError(null);
+  // Paged views ask the API for one page and let it do the filtering and ordering; grouped views
+  // and the two browser-only sorts still need every copy (see collection-paging).
+  const paged = usesServerPaging(category, sort);
+  const fetchKey = collectionFetchKey(category, sort, submittedQuery);
 
-        const activeCategory = nextCategory ?? category;
-        const params = new URLSearchParams();
-        params.set("all", "true");
-        if (search) params.set("q", search);
-
-        for (const [key, value] of Object.entries(
-          categoryQueryParams(activeCategory),
-        )) {
-          params.set(key, value);
-        }
-
-        const response = await fetch(`/api/collection?${params.toString()}`);
-
-        if (response.status === 503) {
-          setNeedsSetup(true);
-          return;
-        }
-
-        if (!response.ok) {
-          const body = (await response.json()) as { detail?: unknown };
-          setError(formatApiDetail(body.detail, "Failed to load collection"));
-          return;
-        }
-
-        const data = (await response.json()) as CollectionResult;
-        setResult(data);
-        setNeedsSetup(false);
+  const fetchPage = useCallback(
+    async (offset: number | null): Promise<CollectionResult | null> => {
+      const params = collectionParams({
+        search: submittedQuery || undefined,
+        category,
+        sort,
+        offset,
       });
+
+      const response = await fetch(`/api/collection?${params.toString()}`);
+
+      if (response.status === 503) {
+        setNeedsSetup(true);
+        return null;
+      }
+
+      if (!response.ok) {
+        const body = (await response.json()) as { detail?: unknown };
+        setError(formatApiDetail(body.detail, "Failed to load collection"));
+        return null;
+      }
+
+      setNeedsSetup(false);
+      return (await response.json()) as CollectionResult;
     },
-    [category],
+    [category, sort, submittedQuery],
   );
+
+  const loadCollection = useCallback(() => {
+    startTransition(async () => {
+      setError(null);
+      const data = await fetchPage(paged ? 0 : null);
+      if (data) setResult(data);
+    });
+  }, [fetchPage, paged]);
+
+  const loadMore = useCallback(() => {
+    if (!paged || !result) return;
+
+    const loaded = result.items?.length ?? 0;
+    if (loaded >= (result.total ?? 0)) return;
+
+    startTransition(async () => {
+      setError(null);
+      const data = await fetchPage(loaded);
+      if (!data) return;
+
+      setResult((previous) => {
+        if (!previous) return data;
+        return {
+          ...previous,
+          total: data.total ?? previous.total,
+          summary: data.summary ?? previous.summary,
+          items: [...(previous.items ?? []), ...(data.items ?? [])],
+        };
+      });
+    });
+  }, [fetchPage, paged, result]);
 
   useEffect(() => {
     startTransition(async () => {
@@ -117,7 +146,10 @@ export function CollectionView() {
 
   useEffect(() => {
     loadCollection();
-  }, [loadCollection]);
+    // Keyed on fetchKey, not on loadCollection: switching between two browser-side sorts leaves
+    // the server response identical, so it must not refire the request.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchKey]);
 
   useEffect(() => {
     if (!result?.items?.length) return;
@@ -134,21 +166,31 @@ export function CollectionView() {
   }, [result?.items]);
 
   const items = useMemo(() => {
-    const base = filterByCategory(result?.items ?? [], category);
-    return sortCollectionCopies(base, sort);
-  }, [result?.items, sort, category]);
+    const loaded = result?.items ?? [];
+    // A paged response is already filtered and ordered by the API. Re-sorting it here would only
+    // reorder the rows that happen to be loaded, which is worse than leaving it alone.
+    if (paged) return loaded;
+    return sortCollectionCopies(filterByCategory(loaded, category), sort);
+  }, [result?.items, sort, category, paged]);
 
+  const loadedCount = result?.items?.length ?? 0;
+  const hasMore = paged && loadedCount < (result?.total ?? 0);
+
+  // Both counts are derived from the loaded rows, so they're only true over a full load. When
+  // paging they're left undefined rather than reported off a single page — the API has no set
+  // facet or duplicates aggregate to ask instead.
   const uniqueSetCount = useMemo(() => {
+    if (paged) return undefined;
     return new Set(
       (result?.items ?? [])
         .map((copy) => copy.card?.set_name?.trim())
         .filter(Boolean),
     ).size;
-  }, [result?.items]);
+  }, [result?.items, paged]);
 
   const duplicateCount = useMemo(
-    () => countDuplicateCards(result?.items ?? []),
-    [result?.items],
+    () => (paged ? undefined : countDuplicateCards(result?.items ?? [])),
+    [result?.items, paged],
   );
 
   const ownedTotals = useMemo(
@@ -157,10 +199,10 @@ export function CollectionView() {
   );
 
   const displayTotal =
-    category === "all"
-      ? (result?.total ?? 0)
-      : category === "duplicates"
-        ? duplicateCount
+    category === "duplicates"
+      ? (duplicateCount ?? 0)
+      : paged || category === "all"
+        ? (result?.total ?? 0)
         : items.length;
 
   const highlightCardNumber =
@@ -171,9 +213,11 @@ export function CollectionView() {
     category !== "by_set" &&
     category !== "duplicates";
 
+  // Each handler only moves state; the effect above decides whether that state change actually
+  // needs a new request. Previously these fired a fetch AND changed state, which refetched twice.
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    loadCollection(query.trim() || undefined, category);
+    setSubmittedQuery(query.trim());
   }
 
   function handleSortChange(nextSort: CollectionSortOption) {
@@ -182,7 +226,6 @@ export function CollectionView() {
 
   function handleCategoryChange(nextCategory: CollectionCategoryFilter) {
     setCategory(nextCategory);
-    loadCollection(query.trim() || undefined, nextCategory);
   }
 
   if (needsSetup) {
@@ -342,6 +385,22 @@ export function CollectionView() {
                 : "No cards match this filter."}
             </div>
           )}
+
+          {hasMore ? (
+            <div className="flex flex-col items-center gap-2 pt-2">
+              <p className="text-xs text-slate-500">
+                Showing {loadedCount} of {result.total}
+              </p>
+              <button
+                type="button"
+                onClick={loadMore}
+                disabled={isPending}
+                className="rounded-xl border border-slate-800 bg-slate-900/50 px-6 py-3 text-sm text-slate-200 transition hover:border-slate-600 hover:bg-slate-900/80 disabled:opacity-60"
+              >
+                {isPending ? "Loading…" : "Load more"}
+              </button>
+            </div>
+          ) : null}
         </>
       ) : isPending ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
