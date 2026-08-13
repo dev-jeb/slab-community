@@ -7,6 +7,7 @@ import { SetupPrompt } from "@/components/collection/SetupPrompt";
 import { PortfolioChart } from "@/components/portfolio/PortfolioChart";
 import { SalesView } from "@/components/sales/SalesView";
 import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
+import { Sheen, SheenBar } from "@/components/ui/sheen";
 import { gainTone, StatCard, StatGrid } from "@/components/ui/StatCard";
 import {
   formatCurrency,
@@ -222,7 +223,9 @@ export function PortfolioView() {
   return (
     <Suspense
       fallback={
-        <div className="h-48 animate-pulse rounded-xl bg-slate-900" />
+        <Sheen loading label="Loading portfolio">
+          <SheenBar className="h-48 w-full rounded-xl" />
+        </Sheen>
       }
     >
       <PortfolioContent />

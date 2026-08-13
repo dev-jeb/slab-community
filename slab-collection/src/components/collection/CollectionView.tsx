@@ -521,7 +521,7 @@ export function CollectionView() {
           {Array.from({ length: 8 }).map((_, index) => (
             <div
               key={index}
-              className="aspect-[3/5] animate-pulse rounded-xl bg-slate-900"
+              className="sheen aspect-[3/5] rounded-xl border border-slate-800 bg-slate-900/40"
             />
           ))}
         </div>

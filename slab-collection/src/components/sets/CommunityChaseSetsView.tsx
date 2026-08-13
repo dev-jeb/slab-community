@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Sheen, SheenBar } from "@/components/ui/sheen";
 import { useCallback, useEffect, useState, useTransition } from "react";
 
 import { cardSubtitle, cardTitle } from "@/lib/slab/format";
@@ -31,7 +32,9 @@ function CommunitySetDetail({ setUuid }: { setUuid: string }) {
   if (isPending && !detail) {
     return (
       <div className="mt-3 rounded-lg border border-slate-800 bg-slate-950/50 p-4">
-        <div className="h-16 animate-pulse rounded bg-slate-800" />
+        <Sheen loading label="Loading set">
+          <SheenBar className="h-16 w-full rounded" />
+        </Sheen>
       </div>
     );
   }
@@ -326,7 +329,7 @@ export function CommunityChaseSetsView() {
           {Array.from({ length: 4 }).map((_, index) => (
             <div
               key={index}
-              className="h-28 animate-pulse rounded-xl bg-slate-900"
+              className="sheen h-28 rounded-xl border border-slate-800 bg-slate-900/40"
             />
           ))}
         </div>

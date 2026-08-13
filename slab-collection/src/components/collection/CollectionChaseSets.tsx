@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { ChaseSetWizard } from "@/components/collection/ChaseSetWizard";
 import { PlayerAvatar } from "@/components/collection/PlayerAvatar";
 import { TeamLogo } from "@/components/collection/TeamLogo";
+import { Sheen, SheenBar } from "@/components/ui/sheen";
 import {
   defaultChaseViewMode,
   entryTeam,
@@ -122,7 +123,9 @@ function ChaseSetDetailPanel({ setUuid }: { setUuid: string }) {
   if (isPending && !detail) {
     return (
       <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-6">
-        <div className="h-24 animate-pulse rounded-lg bg-slate-800" />
+        <Sheen loading label="Loading set">
+          <SheenBar className="h-24 w-full rounded-lg" />
+        </Sheen>
       </div>
     );
   }
@@ -526,11 +529,11 @@ export function CollectionChaseSets({
 
   if (isPending && sets.length === 0) {
     return (
-      <div className="space-y-3">
+      <Sheen loading label="Loading chase sets" className="space-y-3">
         {Array.from({ length: 3 }).map((_, index) => (
-          <div key={index} className="h-20 animate-pulse rounded-xl bg-slate-900" />
+          <SheenBar key={index} className="h-20 w-full rounded-xl" />
         ))}
-      </div>
+      </Sheen>
     );
   }
 
@@ -552,10 +555,6 @@ export function CollectionChaseSets({
         </div>
       ) : (
         <div className="space-y-3">
-          <p className="text-sm text-slate-400">
-            {sets.length} chase set{sets.length === 1 ? "" : "s"} · completion tracked against
-            your collection
-          </p>
           {sets.map((set) => {
             const expanded = expandedUuid === set.uuid;
             return (

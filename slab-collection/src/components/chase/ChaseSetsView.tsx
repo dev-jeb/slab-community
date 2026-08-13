@@ -5,6 +5,8 @@ import { Suspense, useCallback, useState } from "react";
 
 import { CollectionChaseSets } from "@/components/collection/CollectionChaseSets";
 import { CommunityChaseSetsView } from "@/components/sets/CommunityChaseSetsView";
+import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
+import { Sheen, SheenBar } from "@/components/ui/sheen";
 
 type ChaseTab = "mine" | "discover";
 
@@ -13,7 +15,8 @@ function ChaseSetsContent() {
   const searchParams = useSearchParams();
   const tab: ChaseTab =
     searchParams.get("tab") === "discover" ? "discover" : "mine";
-  const [mySetCount, setMySetCount] = useState(0);
+  // undefined until the list loads, so the tab sheens instead of claiming zero sets.
+  const [mySetCount, setMySetCount] = useState<number | undefined>(undefined);
 
   const setTab = useCallback(
     (nextTab: ChaseTab) => {
@@ -37,18 +40,25 @@ function ChaseSetsContent() {
             ? "Create and track custom chase sets against your collection."
             : "Discover public chase sets from other collectors and subscribe to track completion."}
         </p>
-        <div className="flex rounded-lg border border-slate-800 bg-slate-950/60 p-1">
-          <TabButton
-            active={tab === "mine"}
-            onClick={() => setTab("mine")}
-            label={`My sets${mySetCount ? ` (${mySetCount})` : ""}`}
-          />
-          <TabButton
-            active={tab === "discover"}
-            onClick={() => setTab("discover")}
-            label="Discover"
-          />
-        </div>
+        <SegmentedTabs
+          tabs={[
+            {
+              id: "mine",
+              label: "My sets",
+              hint: "Sets you created or subscribed to",
+              showCount: true,
+              count: mySetCount,
+            },
+            {
+              id: "discover",
+              label: "Discover",
+              hint: "Public sets from other collectors",
+            },
+          ]}
+          value={tab}
+          onChange={setTab}
+          ariaLabel="Chase set list"
+        />
       </div>
 
       {tab === "discover" ? (
@@ -64,34 +74,14 @@ export function ChaseSetsView() {
   return (
     <Suspense
       fallback={
-        <div className="h-48 animate-pulse rounded-xl bg-slate-900" />
+        <Sheen loading label="Loading chase sets" className="space-y-3">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <SheenBar key={index} className="h-20 w-full rounded-xl" />
+          ))}
+        </Sheen>
       }
     >
       <ChaseSetsContent />
     </Suspense>
-  );
-}
-
-function TabButton({
-  active,
-  onClick,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
-        active
-          ? "bg-sky-600 text-white"
-          : "text-slate-400 hover:text-slate-200"
-      }`}
-    >
-      {label}
-    </button>
   );
 }
