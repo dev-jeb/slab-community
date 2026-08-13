@@ -52,9 +52,11 @@ function main(): void {
       const active = registerTools(server, ctx);
       registerResources(server, ctx);
       registerPrompts(server);
+      // Names the credential SOURCE, never the credential. Enough to diagnose
+      // "which key is it actually using", which is the usual cause of a 401.
       log(
         `serving ${active.length} tools against ${config.apiUrl} ` +
-          `(writes ${config.writesEnabled ? 'ENABLED' : 'disabled'})`,
+          `(key from ${config.keySource}, writes ${config.writesEnabled ? 'ENABLED' : 'disabled'})`,
       );
       return server;
     },

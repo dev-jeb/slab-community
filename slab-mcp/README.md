@@ -65,11 +65,61 @@ key.
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `SLAB_API_KEY` | Yes | — | Your slab API key. |
+| `SLAB_API_KEY` | one of these two | — | Your slab API key, literally. |
+| `SLAB_API_KEY_COMMAND` | one of these two | — | A command that *prints* the key. See [Handling the API key](#handling-the-api-key). |
 | `SLAB_API_URL` | No | `https://api.slab.dev-jeb.com` | Override for local development. |
 | `SLAB_COLLECTOR` | No | your account's default | Collector UUID to act as. |
 | `SLAB_MCP_WRITE` | No | `0` | Set to `1` to register the write tools. |
 | `SLAB_MCP_TIMEOUT_MS` | No | `30000` | Per-request HTTP timeout. |
+
+### Handling the API key
+
+Pasting the key straight into your MCP client config works, and for CI or a container it is the
+right answer. On a workstation there is a better one, for a reason specific to agents.
+
+The usual objection to a key in a config file is plaintext-at-rest — but `~/.claude.json` is already
+`0600`, so the OS is not the weak point. The weak point is that **the agent can read its own
+config**. Ask Claude Code to debug a flaky MCP server and a perfectly reasonable next step is to
+read that file, at which point a live credential is in a transcript, in scrollback, and in whatever
+that conversation gets pasted into. Nothing was breached; the key leaked sideways through ordinary
+use.
+
+So prefer `SLAB_API_KEY_COMMAND`, which holds an *instruction* instead of a credential:
+
+```bash
+# store the key once, in the OS keychain
+security add-generic-password -s slab-mcp -a "$USER" -w   # macOS; prompts for the key
+
+claude mcp add slab -s user \
+  -e SLAB_API_KEY_COMMAND='security find-generic-password -s slab-mcp -w' \
+  -- npx -y slab-mcp
+```
+
+Now `~/.claude.json` contains a lookup command, and the secret lives behind the OS keychain. The
+same seam works with anything that prints a secret to stdout:
+
+| Backend | Command |
+|---|---|
+| macOS Keychain | `security find-generic-password -s slab-mcp -w` |
+| 1Password | `op read "op://Private/slab/credential"` |
+| pass | `pass show slab/api-key` |
+| Vault | `vault kv get -field=key secret/slab` |
+
+slab-mcp depends on none of them — it runs whatever you give it and reads stdout, so a backend it
+has never heard of works too.
+
+Two more things worth doing, both of which slab already supports:
+
+- **Mint a dedicated key for the MCP** and name it (`slab` portal → Account → API Keys). Keys carry
+  a label and `last_used_dt` and revoke individually, so an agent-held key can be killed without
+  disturbing your CLI or scripts, and you can see when it was last used.
+- **Leave writes off** unless you need them. A read-only key-holder cannot damage your collection
+  regardless of what the agent is talked into.
+
+Notes: if both variables are set, `SLAB_API_KEY` wins — explicit beats indirect, and the startup log
+names the source (never the value) so a forgotten shell export shadowing your keychain is visible
+rather than a mystery 401. Don't inline a secret in the command itself; a failing command is echoed
+back in the error so you can debug it.
 
 ### Enabling writes
 

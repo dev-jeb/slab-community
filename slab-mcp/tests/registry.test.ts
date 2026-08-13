@@ -19,6 +19,7 @@ import { ALL_TOOLS, READ_TOOLS, WRITE_TOOLS } from '../src/tools/index.js';
 import { PROMPTS } from '../src/prompts/index.js';
 import { RESOURCES } from '../src/resources/index.js';
 import { loadConfig } from '../src/config.js';
+import { resolveApiKey } from '../src/credentials.js';
 import { ApiError, ConfigError, toToolError } from '../src/errors.js';
 
 describe('tool registry', () => {
@@ -165,6 +166,67 @@ describe('version', () => {
       version: string;
     };
     assert.equal(VERSION, pkg.version);
+  });
+});
+
+describe('credentials', () => {
+  const env = (o: Record<string, string>) => o as NodeJS.ProcessEnv;
+
+  it('reads a literal key', () => {
+    const r = resolveApiKey(env({ SLAB_API_KEY: '  sk_test_abc  ' }));
+    assert.equal(r.key, 'sk_test_abc'); // trimmed
+    assert.equal(r.source, 'SLAB_API_KEY');
+  });
+
+  it('runs a credential command and uses its stdout', () => {
+    const r = resolveApiKey(env({ SLAB_API_KEY_COMMAND: 'printf "sk_from_vault\\n"' }));
+    assert.equal(r.key, 'sk_from_vault'); // trailing newline stripped
+    assert.equal(r.source, 'SLAB_API_KEY_COMMAND');
+  });
+
+  it('prefers the literal key when both are set, and says which it used', () => {
+    // A forgotten shell export shadowing a vault is the confusing case; the
+    // reported source is what makes it diagnosable.
+    const r = resolveApiKey(env({ SLAB_API_KEY: 'sk_literal', SLAB_API_KEY_COMMAND: 'echo sk_vault' }));
+    assert.equal(r.key, 'sk_literal');
+    assert.equal(r.source, 'SLAB_API_KEY');
+  });
+
+  it('fails loudly when the credential command fails', () => {
+    assert.throws(() => resolveApiKey(env({ SLAB_API_KEY_COMMAND: 'exit 3' })), ConfigError);
+  });
+
+  it('fails when the credential command prints nothing', () => {
+    assert.throws(() => resolveApiKey(env({ SLAB_API_KEY_COMMAND: 'true' })), ConfigError);
+  });
+
+  it('never puts command STDOUT in the error message', () => {
+    // A helper that prints the secret and then fails must not carry that
+    // secret into the error, which lands in the client's server log.
+    //
+    // The command is base64 so the secret appears ONLY in its stdout, never in
+    // the command text — the error deliberately does echo the command back
+    // (that is how you debug a broken helper), so a test that inlined the
+    // secret would be testing the wrong thing.
+    const secret = 'sk_leaked_secret';
+    const encoded = Buffer.from(secret).toString('base64');
+    try {
+      resolveApiKey(env({ SLAB_API_KEY_COMMAND: `printf %s ${encoded} | base64 -d; exit 1` }));
+      assert.fail('expected a ConfigError');
+    } catch (err) {
+      assert.ok(err instanceof ConfigError);
+      assert.ok(!err.message.includes(secret), `error leaked command stdout: ${err.message}`);
+    }
+  });
+
+  it('explains both options when nothing is configured', () => {
+    try {
+      resolveApiKey(env({}));
+      assert.fail('expected a ConfigError');
+    } catch (err) {
+      assert.ok(err instanceof ConfigError);
+      assert.match(err.message, /SLAB_API_KEY_COMMAND/);
+    }
   });
 });
 
