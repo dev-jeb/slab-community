@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Discord
+    url: https://discord.gg/FWNWqrXZmg
+    about: Questions, ideas, showing off what you built, and anything about the slab API itself.
+  - name: slab API reference
+    url: https://api.slab.dev-jeb.com/docs
+    about: The authoritative, always-current API docs. Generated from the running service.
