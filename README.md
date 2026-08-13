@@ -15,8 +15,8 @@ Your Slab API key stays on the server — the browser never sees it.
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/Tdtemplev/HockeyFrontEnd.git
-cd HockeyFrontEnd
+git clone https://github.com/dev-jeb/slab-community.git
+cd slab-community
 ```
 
 ### 2. Configure environment variables
