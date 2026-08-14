@@ -12,7 +12,7 @@ import {
 import type { CustomSetOut } from "@/lib/slab/types";
 
 interface ChaseSetWizardProps {
-  onCreated: (set: CustomSetOut) => void;
+  onCreated: (set: CustomSetOut, slotCount?: number) => void;
 }
 
 interface PreviewPayload {
@@ -159,7 +159,13 @@ export function ChaseSetWizard({ onCreated }: ChaseSetWizardProps) {
           mode: payload.mode,
         });
         setStep("done");
-        onCreated(payload.set);
+        onCreated(
+          payload.set,
+          payload.set.card_count ||
+            preview?.total ||
+            payload.totalCards ||
+            undefined,
+        );
       } finally {
         setCreateLoading(false);
       }

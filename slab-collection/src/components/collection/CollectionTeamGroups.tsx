@@ -114,10 +114,16 @@ export function CollectionTeamGroups({
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
 
   // Copies arrive on expand. A team's copies are just the collection filtered by that team,
-  // so this needs no endpoint of its own.
-  const { copies, loading } = useGroupCopies(
-    expandedTeam ? { team: expandedTeam } : null,
+  // so this needs no endpoint of its own. Search results already attach the matching copies,
+  // and fetching by team would bring back every card on the team, search ignored.
+  const expandedGroupForFetch = expandedTeam
+    ? groups.find((group) => group.name === expandedTeam)
+    : undefined;
+  const preloaded = expandedGroupForFetch?.copies;
+  const { copies: fetched, loading } = useGroupCopies(
+    preloaded !== undefined || !expandedTeam ? null : { team: expandedTeam },
   );
+  const copies = preloaded ?? fetched;
   const tileRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const panelRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 

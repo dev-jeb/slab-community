@@ -29,6 +29,12 @@ import {
   usesServerPaging,
   type GroupSortOption,
 } from "@/lib/collection-paging";
+import {
+  duplicateGroupsFromCopies,
+  filterCopiesBySearch,
+  setGroupsFromCopies,
+  teamGroupsFromCopies,
+} from "@/lib/collection-search";
 import { primarySubjectName } from "@/lib/names";
 import { prefetchPlayerImages } from "@/lib/player-image-cache";
 import {
@@ -99,20 +105,23 @@ export function CollectionView() {
     }
   }, []);
 
-  // Three shapes of request, decided by the browse mode and sort (see collection-paging):
+  // Three shapes of request, decided by the browse mode, sort, and search (see collection-paging):
   //   grouped   -> its own endpoint, which rolls up and pages the GROUPS
   //   paged     -> one page of copies, filtered and ordered by the API
-  //   full load -> everything, for the two sorts the API can't express
+  //   full load -> everything, for the two sorts the API can't express, and for search
+  // Search is matched in the browser across subset/finish/attributes (Slab's `q` does not), so a
+  // query forces the full-load path and grouped views are rebuilt from the matching copies.
   const groupKind = groupKindFor(browse);
-  const paged = usesServerPaging(browse, sort);
-  const fetchKey = groupKind
-    ? `group|${groupKind}|${filter}|${groupSort}|${submittedQuery}`
-    : collectionFetchKey(filter, sort, submittedQuery);
+  const searching = submittedQuery.trim().length > 0;
+  const paged = usesServerPaging(browse, sort, submittedQuery);
+  const fetchKey =
+    groupKind && !searching
+      ? `group|${groupKind}|${filter}|${groupSort}`
+      : collectionFetchKey(filter, sort, submittedQuery);
 
   const fetchPage = useCallback(
     async (offset: number | null): Promise<CollectionResult | null> => {
       const params = collectionParams({
-        search: submittedQuery || undefined,
         filter,
         sort,
         offset,
@@ -134,7 +143,7 @@ export function CollectionView() {
       setNeedsSetup(false);
       return (await response.json()) as CollectionResult;
     },
-    [filter, sort, submittedQuery],
+    [filter, sort],
   );
 
   const fetchGroups = useCallback(async (): Promise<GroupResult<unknown> | null> => {
@@ -144,7 +153,6 @@ export function CollectionView() {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        q: submittedQuery || undefined,
         // The filter narrows the copies BEFORE they're rolled up, so "rookies, by set" is one
         // request rather than a set list the browser has to re-filter.
         ...groupFilterParams(filter),
@@ -171,13 +179,13 @@ export function CollectionView() {
 
     setNeedsSetup(false);
     return (await response.json()) as GroupResult<unknown>;
-  }, [filter, groupKind, groupSort, submittedQuery]);
+  }, [filter, groupKind, groupSort]);
 
   const loadCollection = useCallback(() => {
     startTransition(async () => {
       setError(null);
 
-      if (groupKind) {
+      if (groupKind && !searching) {
         const data = await fetchGroups();
         if (data) setGroups(data);
         // Marked done even on failure: the error banner explains what happened, and leaving a
@@ -190,7 +198,7 @@ export function CollectionView() {
       if (data) setResult(data);
       setLoadedKey(fetchKey);
     });
-  }, [fetchGroups, fetchKey, fetchPage, groupKind, paged]);
+  }, [fetchGroups, fetchKey, fetchPage, groupKind, paged, searching]);
 
   const loadMore = useCallback(() => {
     if (!paged || !result) return;
@@ -247,11 +255,30 @@ export function CollectionView() {
 
   const items = useMemo(() => {
     const loaded = result?.items ?? [];
+    const matched = filterCopiesBySearch(loaded, submittedQuery);
     // A paged response is already filtered and ordered by the API. Re-sorting it here would only
     // reorder the rows that happen to be loaded, which is worse than leaving it alone.
-    if (paged) return loaded;
-    return sortCollectionCopies(loaded, sort);
-  }, [result?.items, sort, paged]);
+    if (paged) return matched;
+    return sortCollectionCopies(matched, sort);
+  }, [result?.items, sort, paged, submittedQuery]);
+
+  const visibleSetGroups = useMemo(() => {
+    if (groupKind !== "sets") return [];
+    if (searching) return setGroupsFromCopies(items, groupSort);
+    return (groups?.items ?? []) as SetGroupOut[];
+  }, [groupKind, searching, items, groupSort, groups?.items]);
+
+  const visibleTeamGroups = useMemo(() => {
+    if (groupKind !== "teams") return [];
+    if (searching) return teamGroupsFromCopies(items, groupSort);
+    return (groups?.items ?? []) as TeamGroupOut[];
+  }, [groupKind, searching, items, groupSort, groups?.items]);
+
+  const visibleDuplicateGroups = useMemo(() => {
+    if (groupKind !== "duplicates") return [];
+    if (searching) return duplicateGroupsFromCopies(items, groupSort);
+    return (groups?.items ?? []) as DuplicateGroupOut[];
+  }, [groupKind, searching, items, groupSort, groups?.items]);
 
   // True from the moment the inputs change until that request's data is on screen — including
   // the first load, when there's nothing to be stale.
@@ -273,7 +300,13 @@ export function CollectionView() {
 
   // For a grouped view this is the number of groups, which is what those views label.
   const displayTotal = groupKind
-    ? (groups?.total ?? 0)
+    ? searching
+      ? groupKind === "sets"
+        ? visibleSetGroups.length
+        : groupKind === "teams"
+          ? visibleTeamGroups.length
+          : visibleDuplicateGroups.length
+      : (groups?.total ?? 0)
     : paged
       ? (result?.total ?? 0)
       : items.length;
@@ -315,7 +348,7 @@ export function CollectionView() {
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search collection…"
+            placeholder="Search player, set, subset, parallel…"
             className="min-w-0 flex-1 rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-white outline-none focus:border-sky-500/50"
           />
           <button
@@ -381,7 +414,7 @@ export function CollectionView() {
                   type="search"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search player, set, or card number…"
+                  placeholder="Search player, set, subset, parallel…"
                   className="min-w-0 flex-1 rounded-xl border border-slate-800 bg-slate-950 px-4 py-2 text-white outline-none focus:border-sky-500/50"
                 />
                 <button
@@ -447,16 +480,16 @@ export function CollectionView() {
             <GroupSkeleton />
           ) : groupKind === "teams" ? (
             <CollectionTeamGroups
-              groups={(groups?.items ?? []) as TeamGroupOut[]}
+              groups={visibleTeamGroups}
               sort={groupSort}
             />
           ) : groupKind === "sets" ? (
             <CollectionSetBanners
-              groups={(groups?.items ?? []) as SetGroupOut[]}
+              groups={visibleSetGroups}
             />
           ) : groupKind === "duplicates" ? (
             <CollectionDuplicateGroups
-              groups={(groups?.items ?? []) as DuplicateGroupOut[]}
+              groups={visibleDuplicateGroups}
             />
           ) : awaitingData ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">

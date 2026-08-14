@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 
 import { ChaseSetWizard } from "@/components/collection/ChaseSetWizard";
 import { PlayerAvatar } from "@/components/collection/PlayerAvatar";
@@ -32,13 +32,18 @@ function completionTone(pct: number): string {
 
 function ChaseSetBanner({
   set,
+  slotCount,
   expanded,
   onToggle,
 }: {
   set: CustomSetOut;
+  /** Full membership. The list's `card_count` is 0 for dynamic sets until detail loads. */
+  slotCount: number | null;
   expanded: boolean;
   onToggle: () => void;
 }) {
+  const displayCount = slotCount ?? (set.card_count > 0 ? set.card_count : null);
+
   return (
     <button
       type="button"
@@ -62,8 +67,8 @@ function ChaseSetBanner({
 
       <div className="flex shrink-0 items-center gap-5 text-sm">
         <div className="text-right">
-          <p className="text-[10px] uppercase tracking-wider text-slate-500">Cards</p>
-          <p className="font-semibold text-white">{set.card_count}</p>
+          <p className="text-[10px] uppercase tracking-wider text-slate-500">Slots</p>
+          <p className="font-semibold text-white">{displayCount ?? "—"}</p>
         </div>
         <span className="text-xs text-sky-400">{expanded ? "Hide" : "Show"}</span>
       </div>
@@ -71,7 +76,13 @@ function ChaseSetBanner({
   );
 }
 
-function ChaseSetDetailPanel({ setUuid }: { setUuid: string }) {
+function ChaseSetDetailPanel({
+  setUuid,
+  onSlotCount,
+}: {
+  setUuid: string;
+  onSlotCount?: (count: number) => void;
+}) {
   const [detail, setDetail] = useState<CustomSetDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -91,7 +102,12 @@ function ChaseSetDetailPanel({ setUuid }: { setUuid: string }) {
       const data = (await response.json()) as CustomSetDetail;
       setDetail(data);
       setViewMode(defaultChaseViewMode(data.cards.length));
+      // List `card_count` is 0 for dynamic sets; completion covers the full membership.
+      const count = data.completion?.total_cards ?? data.card_count;
+      if (count != null) onSlotCount?.(count);
     });
+    // onSlotCount is called once the fetch lands; listing it would refetch on every parent render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setUuid]);
 
   const filteredEntries = useMemo(() => {
@@ -493,9 +509,16 @@ export function CollectionChaseSets({
   onCountChange?: (count: number) => void;
 }) {
   const [sets, setSets] = useState<CustomSetOut[]>([]);
+  const [slotCounts, setSlotCounts] = useState<Record<string, number>>({});
   const [expandedUuid, setExpandedUuid] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  const rememberSlotCount = useCallback((uuid: string, count: number) => {
+    setSlotCounts((current) =>
+      current[uuid] === count ? current : { ...current, [uuid]: count },
+    );
+  }, []);
 
   function loadSets() {
     startTransition(async () => {
@@ -508,6 +531,13 @@ export function CollectionChaseSets({
       }
       const data = (await response.json()) as { sets: CustomSetOut[] };
       setSets(data.sets);
+      setSlotCounts((current) => {
+        const next = { ...current };
+        for (const set of data.sets) {
+          if (set.card_count > 0) next[set.uuid] = set.card_count;
+        }
+        return next;
+      });
     });
   }
 
@@ -519,11 +549,12 @@ export function CollectionChaseSets({
     onCountChange?.(sets.length);
   }, [sets.length, onCountChange]);
 
-  function handleSetCreated(set: CustomSetOut) {
+  function handleSetCreated(set: CustomSetOut, slotCount?: number) {
     setSets((current) => {
       const exists = current.some((item) => item.uuid === set.uuid);
       return exists ? current : [set, ...current];
     });
+    if (slotCount && slotCount > 0) rememberSlotCount(set.uuid, slotCount);
     setExpandedUuid(set.uuid);
     loadSets();
   }
@@ -562,6 +593,7 @@ export function CollectionChaseSets({
               <section key={set.uuid} className="space-y-3">
                 <ChaseSetBanner
                   set={set}
+                  slotCount={slotCounts[set.uuid] ?? null}
                   expanded={expanded}
                   onToggle={() =>
                     setExpandedUuid((current) =>
@@ -569,7 +601,12 @@ export function CollectionChaseSets({
                     )
                   }
                 />
-                {expanded ? <ChaseSetDetailPanel setUuid={set.uuid} /> : null}
+                {expanded ? (
+                  <ChaseSetDetailPanel
+                    setUuid={set.uuid}
+                    onSlotCount={(count) => rememberSlotCount(set.uuid, count)}
+                  />
+                ) : null}
               </section>
             );
           })}

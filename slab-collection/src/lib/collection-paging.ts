@@ -54,20 +54,22 @@ export function serverSortKey(sort: CollectionSortOption): string | null {
 /**
  * True when the API can both filter and order this view, so the browser only needs one page.
  *
- * False means the browser still has to do the ordering, which is only correct over a fully-loaded
- * collection — the two sorts the API can't express. Grouped modes are neither: they have their own
- * endpoints (see `groupKindFor`) and never take this path.
+ * False means the browser still has to do the work, which is only correct over a fully-loaded
+ * collection — the two sorts the API can't express, and free-text search (Slab's `q` only matches
+ * player / set / card number, not subset, finish, or attributes). Grouped modes are neither: they
+ * have their own endpoints (see `groupKindFor`) and never take this path.
  */
 export function usesServerPaging(
   browse: CollectionBrowseMode,
   sort: CollectionSortOption,
+  search = "",
 ): boolean {
+  if (search.trim()) return false;
   if (groupKindFor(browse)) return false;
   return SERVER_SORT[sort] !== null;
 }
 
 export interface CollectionRequest {
-  search?: string;
   filter: CollectionFilter;
   sort: CollectionSortOption;
   /** Row to start at, or null to fetch the whole collection. */
@@ -75,11 +77,13 @@ export interface CollectionRequest {
 }
 
 /**
- * Build the query string for /api/collection. `q` always goes to the server, so searching finds
- * cards anywhere in the collection rather than only among the rows already on screen.
+ * Build the query string for /api/collection.
+ *
+ * Free-text search is applied in the browser (see `filterCopiesBySearch`) so this does not send
+ * `q`. Slab's `q` only matches player, set, and card number, which would hide Young Guns / Outburst
+ * matches that live on subset and finish.
  */
 export function collectionParams({
-  search,
   filter,
   sort,
   offset,
@@ -95,8 +99,6 @@ export function collectionParams({
     if (serverSort) params.set("sort", serverSort);
   }
 
-  if (search) params.set("q", search);
-
   for (const [key, value] of Object.entries(categoryQueryParams(filter))) {
     params.set(key, value);
   }
@@ -106,16 +108,16 @@ export function collectionParams({
 
 /**
  * Identity of a request's *server-visible* inputs. Two states with the same key return the same
- * rows, so re-sorting in the browser doesn't trigger a refetch.
+ * rows, so re-sorting or re-searching in the browser doesn't trigger a refetch.
  */
 export function collectionFetchKey(
   filter: CollectionFilter,
   sort: CollectionSortOption,
-  search: string,
+  search = "",
 ): string {
-  return usesServerPaging("cards", sort)
-    ? `paged|${serverSortKey(sort)}|${filter}|${search}`
-    : `all|${filter}|${search}`;
+  return usesServerPaging("cards", sort, search)
+    ? `paged|${serverSortKey(sort)}|${filter}`
+    : `all|${filter}`;
 }
 
 /** Filter params for a grouped request — the same narrowing, applied before the roll-up. */

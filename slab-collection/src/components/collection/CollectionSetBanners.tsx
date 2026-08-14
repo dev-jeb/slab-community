@@ -81,10 +81,16 @@ export function CollectionSetBanners({
   const [expandedSet, setExpandedSet] = useState<string | null>(null);
 
   // Copies arrive on expand, not with the list — see useGroupCopies for what that saved.
+  // Search results already carry the matching copies on each group, so expanding those
+  // must not fetch the whole set (which would drop the search).
   const expandedGroup = groups.find((group) => group.set_uuid === expandedSet);
-  const { copies, loading } = useGroupCopies(
-    expandedGroup ? { set_slug: expandedGroup.set_slug } : null,
+  const preloaded = expandedGroup?.copies;
+  const { copies: fetched, loading } = useGroupCopies(
+    preloaded !== undefined || !expandedGroup
+      ? null
+      : { set_slug: expandedGroup.set_slug },
   );
+  const copies = preloaded ?? fetched;
 
   // A new ordering puts different rows in the same positions, so a stale expansion would open
   // something the user didn't click.
