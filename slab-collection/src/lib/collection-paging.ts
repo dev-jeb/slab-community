@@ -21,16 +21,18 @@ export const COLLECTION_PAGE_SIZE = 48;
 export type CollectionGroupKind = "sets" | "duplicates" | "teams";
 
 /**
- * The grouped endpoint backing a browse mode, or null for the plain card list.
+ * The grouped endpoint backing a browse mode, or null when there isn't one.
  *
- * Every mode except `cards` is served by an endpoint of the same name, which is why this is a
- * one-line mapping rather than a table: the UI's presentation choice and the API's grouped views
- * are the same set of concepts.
+ * Sets, teams, and duplicates each have a `/collection/{kind}` roll-up. Cards is a flat list.
+ * Parallels is grouped in the UI but has no endpoint — the page loads copies and rolls them up.
  */
 export function groupKindFor(
   browse: CollectionBrowseMode,
 ): CollectionGroupKind | null {
-  return browse === "cards" ? null : browse;
+  if (browse === "sets" || browse === "teams" || browse === "duplicates") {
+    return browse;
+  }
+  return null;
 }
 
 /**
@@ -55,9 +57,10 @@ export function serverSortKey(sort: CollectionSortOption): string | null {
  * True when the API can both filter and order this view, so the browser only needs one page.
  *
  * False means the browser still has to do the work, which is only correct over a fully-loaded
- * collection — the two sorts the API can't express, and free-text search (Slab's `q` only matches
- * player / set / card number, not subset, finish, or attributes). Grouped modes are neither: they
- * have their own endpoints (see `groupKindFor`) and never take this path.
+ * collection — the two sorts the API can't express, free-text search (Slab's `q` only matches
+ * player / set / card number, not subset, finish, or attributes), and parallels (no grouped
+ * endpoint). Other grouped modes have their own endpoints (see `groupKindFor`) and never take
+ * this path.
  */
 export function usesServerPaging(
   browse: CollectionBrowseMode,
@@ -65,6 +68,7 @@ export function usesServerPaging(
   search = "",
 ): boolean {
   if (search.trim()) return false;
+  if (browse === "parallels") return false;
   if (groupKindFor(browse)) return false;
   return SERVER_SORT[sort] !== null;
 }
@@ -114,8 +118,9 @@ export function collectionFetchKey(
   filter: CollectionFilter,
   sort: CollectionSortOption,
   search = "",
+  browse: CollectionBrowseMode = "cards",
 ): string {
-  return usesServerPaging("cards", sort, search)
+  return usesServerPaging(browse, sort, search)
     ? `paged|${serverSortKey(sort)}|${filter}`
     : `all|${filter}`;
 }

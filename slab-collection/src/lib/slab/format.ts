@@ -52,6 +52,18 @@ export function cardSubtitle(card?: CardOut | null): string {
   return parts.join(" · ");
 }
 
+/** Set + subset only — the slot, not a specific finish. */
+export function cardFamilySubtitle(card?: CardOut | null): string {
+  if (!card) return "";
+  return [card.set_name, card.subset].filter(Boolean).join(" · ");
+}
+
+/** Catalog finish, or "Base" when the card has none. */
+export function printingLabel(card?: CardOut | null): string {
+  const finish = card?.finish?.trim();
+  return finish || "Base";
+}
+
 export function gradeLabel(copy: CardCopyOut): string | null {
   if (copy.grading_company && copy.grade) {
     return `${copy.grading_company} ${copy.grade}`;

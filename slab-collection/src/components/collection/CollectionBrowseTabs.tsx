@@ -4,7 +4,8 @@ import { SegmentedTabs, type SegmentedTab } from "@/components/ui/SegmentedTabs"
 import type { CollectionBrowseMode } from "@/lib/collection-filters";
 
 /**
- * How the collection is presented — a flat list of cards, or rolled up by set, team, or duplicate.
+ * How the collection is presented — a flat list of cards, or rolled up by set, team,
+ * duplicate, or parallel family.
  *
  * This is a tab strip and not a chip row on purpose. "Sets" and "Teams" used to sit among Autos
  * and Rookies as if picking one meant the same kind of thing, but choosing "Teams" doesn't narrow
@@ -16,6 +17,11 @@ const MODES: { id: CollectionBrowseMode; label: string; hint: string }[] = [
   { id: "sets", label: "Sets", hint: "Grouped by the product they came from" },
   { id: "teams", label: "Teams", hint: "Grouped by the team on the card" },
   { id: "duplicates", label: "Duplicates", hint: "Cards you own more than one of" },
+  {
+    id: "parallels",
+    label: "Parallels",
+    hint: "Finishes and variants you own",
+  },
 ];
 
 interface CollectionBrowseTabsProps {

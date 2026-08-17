@@ -28,6 +28,8 @@ export interface CardOut {
   year?: number | null;
   subset?: string | null;
   finish?: string | null;
+  /** Parent (base) card UUID; null for base cards. */
+  parent_card_uuid?: string | null;
   print_run?: number | null;
   odds?: string | null;
   release_set_slug?: string | null;
@@ -120,6 +122,19 @@ export interface SetGroupOut {
 
 export interface DuplicateGroupOut {
   card: CardOut;
+  copy_count: number;
+  total_value?: string | null;
+  copies?: CardCopyOut[];
+}
+
+/**
+ * Cards you own in more than one printing of the same slot (base + Outburst, two finishes, …).
+ * There is no grouped API for this — the collection page builds it from copies.
+ */
+export interface ParallelGroupOut {
+  family_key: string;
+  card: CardOut;
+  printing_count: number;
   copy_count: number;
   total_value?: string | null;
   copies?: CardCopyOut[];
@@ -348,6 +363,10 @@ export interface DashboardStats {
   sets?: number;
   /** Cards owned more than once, counted per card (quantity counts). */
   duplicates?: number;
+  /** Copies whose catalog card is a parallel (has a parent / finish). */
+  parallel_count?: number;
+  /** Copies whose catalog card is a base card. */
+  base_count?: number;
   graded_count?: number;
   raw_count?: number;
 }

@@ -7,6 +7,7 @@ import { CardTile } from "@/components/collection/CardTile";
 import { CollectionDuplicateGroups } from "@/components/collection/CollectionDuplicateGroups";
 import { CollectionFilterSheet } from "@/components/collection/CollectionFilterSheet";
 import { CollectionFilterStats } from "@/components/collection/CollectionFilterStats";
+import { CollectionParallelGroups } from "@/components/collection/CollectionParallelGroups";
 import { CollectionSetBanners } from "@/components/collection/CollectionSetBanners";
 import { CollectionTeamGroups } from "@/components/collection/CollectionTeamGroups";
 import { SetupPrompt } from "@/components/collection/SetupPrompt";
@@ -32,6 +33,7 @@ import {
 import {
   duplicateGroupsFromCopies,
   filterCopiesBySearch,
+  parallelGroupsFromCopies,
   setGroupsFromCopies,
   teamGroupsFromCopies,
 } from "@/lib/collection-search";
@@ -58,6 +60,7 @@ const TOTAL_LABELS: Record<CollectionBrowseMode, string> = {
   sets: "Sets shown",
   teams: "Teams shown",
   duplicates: "Duplicates shown",
+  parallels: "Parallels shown",
 };
 
 function isMobileViewport(): boolean {
@@ -108,7 +111,8 @@ export function CollectionView() {
   // Three shapes of request, decided by the browse mode, sort, and search (see collection-paging):
   //   grouped   -> its own endpoint, which rolls up and pages the GROUPS
   //   paged     -> one page of copies, filtered and ordered by the API
-  //   full load -> everything, for the two sorts the API can't express, and for search
+  //   full load -> everything, for the two sorts the API can't express, for search, and for
+  //                parallels (no grouped endpoint — the page rolls copies up itself)
   // Search is matched in the browser across subset/finish/attributes (Slab's `q` does not), so a
   // query forces the full-load path and grouped views are rebuilt from the matching copies.
   const groupKind = groupKindFor(browse);
@@ -117,7 +121,7 @@ export function CollectionView() {
   const fetchKey =
     groupKind && !searching
       ? `group|${groupKind}|${filter}|${groupSort}`
-      : collectionFetchKey(filter, sort, submittedQuery);
+      : collectionFetchKey(filter, sort, submittedQuery, browse);
 
   const fetchPage = useCallback(
     async (offset: number | null): Promise<CollectionResult | null> => {
@@ -280,6 +284,11 @@ export function CollectionView() {
     return (groups?.items ?? []) as DuplicateGroupOut[];
   }, [groupKind, searching, items, groupSort, groups?.items]);
 
+  const visibleParallelGroups = useMemo(() => {
+    if (browse !== "parallels") return [];
+    return parallelGroupsFromCopies(items, groupSort);
+  }, [browse, items, groupSort]);
+
   // True from the moment the inputs change until that request's data is on screen — including
   // the first load, when there's nothing to be stale.
   const awaitingData = loadedKey !== fetchKey;
@@ -292,6 +301,7 @@ export function CollectionView() {
   // computed off a single page.
   const uniqueSetCount = stats?.sets;
   const duplicateCount = stats?.duplicates;
+  const parallelCount = stats?.parallel_count;
 
   const ownedTotals = useMemo(
     () => ownedCountByCardUuid(result?.items ?? []),
@@ -299,17 +309,20 @@ export function CollectionView() {
   );
 
   // For a grouped view this is the number of groups, which is what those views label.
-  const displayTotal = groupKind
-    ? searching
-      ? groupKind === "sets"
-        ? visibleSetGroups.length
-        : groupKind === "teams"
-          ? visibleTeamGroups.length
-          : visibleDuplicateGroups.length
-      : (groups?.total ?? 0)
-    : paged
-      ? (result?.total ?? 0)
-      : items.length;
+  const displayTotal =
+    browse === "parallels"
+      ? visibleParallelGroups.length
+      : groupKind
+        ? searching
+          ? groupKind === "sets"
+            ? visibleSetGroups.length
+            : groupKind === "teams"
+              ? visibleTeamGroups.length
+              : visibleDuplicateGroups.length
+          : (groups?.total ?? 0)
+        : paged
+          ? (result?.total ?? 0)
+          : items.length;
 
   const highlightCardNumber =
     sort === "card_number_asc" || sort === "card_number_desc";
@@ -464,6 +477,7 @@ export function CollectionView() {
                 sets: uniqueSetCount,
                 teams: stats?.teams,
                 duplicates: duplicateCount,
+                parallels: parallelCount,
               }}
               disabled={isPending}
             />
@@ -476,7 +490,7 @@ export function CollectionView() {
             </div>
           </div>
 
-          {groupKind && awaitingData ? (
+          {(groupKind || browse === "parallels") && awaitingData ? (
             <GroupSkeleton />
           ) : groupKind === "teams" ? (
             <CollectionTeamGroups
@@ -490,6 +504,10 @@ export function CollectionView() {
           ) : groupKind === "duplicates" ? (
             <CollectionDuplicateGroups
               groups={visibleDuplicateGroups}
+            />
+          ) : browse === "parallels" ? (
+            <CollectionParallelGroups
+              groups={visibleParallelGroups}
             />
           ) : awaitingData ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">

@@ -11,7 +11,12 @@ import type { CardCopyOut, CardOut } from "@/lib/slab/types";
  */
 
 /** How the collection is PRESENTED: a list of cards, or rolled up. */
-export type CollectionBrowseMode = "cards" | "sets" | "teams" | "duplicates";
+export type CollectionBrowseMode =
+  | "cards"
+  | "sets"
+  | "teams"
+  | "duplicates"
+  | "parallels";
 
 /** What NARROWS it. Applies inside every browse mode. */
 export type CollectionFilter = "all" | "auto" | "rookie" | "numbered";
@@ -253,6 +258,114 @@ export function duplicateGroupsOnly(groups: DuplicateGroup[]): DuplicateGroup[] 
 
 export function countDuplicateCards(items: CardCopyOut[]): number {
   return duplicateGroupsOnly(groupByCardUuid(items)).length;
+}
+
+/** A parallel is a catalog variant: it has a parent (base) card, or a named finish. */
+export function copyIsParallel(copy: CardCopyOut): boolean {
+  const card = copy.card;
+  if (!card) return false;
+  return Boolean(card.parent_card_uuid?.trim()) || Boolean(card.finish?.trim());
+}
+
+/**
+ * Same checklist slot: parent UUID when the API has it, otherwise set + number + player so a
+ * base and its finishes still meet when `parent_card_uuid` is missing.
+ */
+function parallelSlotKey(card: CardOut): string | null {
+  const set = card.set_slug?.trim() || card.set_name?.trim();
+  const number = card.card_number?.trim();
+  const player = primarySubjectName(card.subjects);
+  if (!set || !number || !player || player === "Unknown") return null;
+  return `${set}|${number}|${player}`;
+}
+
+function parallelKeysFor(card: CardOut): string[] {
+  const keys = [`id:${card.parent_card_uuid ?? card.uuid}`];
+  const slot = parallelSlotKey(card);
+  if (slot) keys.push(`slot:${slot}`);
+  return keys;
+}
+
+export interface ParallelGroup {
+  familyKey: string;
+  card: CardOut | null;
+  copies: CardCopyOut[];
+  printingCount: number;
+  totalCount: number;
+  totalValue: number;
+}
+
+/**
+ * Union families that share a parent UUID or the same set/number/player slot, so a base
+ * (`parent_card_uuid` null) still groups with its Outburst even when only one side is populated.
+ */
+export function groupByParallelFamily(items: CardCopyOut[]): ParallelGroup[] {
+  const parent = new Map<string, string>();
+
+  const find = (key: string): string => {
+    const current = parent.get(key) ?? key;
+    if (current !== key) {
+      const root = find(current);
+      parent.set(key, root);
+      return root;
+    }
+    return key;
+  };
+
+  const union = (left: string, right: string) => {
+    const rootLeft = find(left);
+    const rootRight = find(right);
+    if (rootLeft !== rootRight) parent.set(rootLeft, rootRight);
+  };
+
+  for (const copy of items) {
+    const card = copy.card;
+    if (!card) continue;
+    const keys = parallelKeysFor(card);
+    for (const key of keys) {
+      if (!parent.has(key)) parent.set(key, key);
+    }
+    for (let index = 1; index < keys.length; index += 1) {
+      union(keys[0], keys[index]);
+    }
+  }
+
+  const grouped = new Map<string, CardCopyOut[]>();
+
+  for (const copy of items) {
+    const card = copy.card;
+    if (!card) continue;
+    const root = find(parallelKeysFor(card)[0]);
+    const current = grouped.get(root) ?? [];
+    current.push(copy);
+    grouped.set(root, current);
+  }
+
+  return [...grouped.entries()].map(([familyKey, copies]) => {
+    const printings = new Set(copies.map((copy) => copy.card_uuid));
+    const representative =
+      copies.find((copy) => copy.card && !copy.card.finish) ?? copies[0];
+
+    return {
+      familyKey,
+      card: representative?.card ?? null,
+      copies,
+      printingCount: printings.size,
+      totalCount: countCopyQuantity(copies),
+      totalValue: copies.reduce(
+        (sum, copy) => sum + Number(copy.market?.fair_market_value ?? 0),
+        0,
+      ),
+    };
+  });
+}
+
+export function parallelGroupsOnly(groups: ParallelGroup[]): ParallelGroup[] {
+  return groups.filter((group) => group.copies.some(copyIsParallel));
+}
+
+export function countParallelGroups(items: CardCopyOut[]): number {
+  return parallelGroupsOnly(groupByParallelFamily(items)).length;
 }
 
 export function ownedCountByCardUuid(items: CardCopyOut[]): Map<string, number> {

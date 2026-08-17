@@ -33,6 +33,12 @@ const GROUP_SORTS: { value: GroupSortOption; label: string }[] = [
   { value: "name", label: "Name (A–Z)" },
 ];
 
+const PARALLEL_SORTS: { value: GroupSortOption; label: string }[] = [
+  { value: "-value", label: "Highest value" },
+  { value: "-copies", label: "Most printings" },
+  { value: "name", label: "Name (A–Z)" },
+];
+
 /** Only teams count distinct players, so only teams can order by them. */
 const TEAM_EXTRA: { value: GroupSortOption; label: string }[] = [
   { value: TEAM_PLAYERS_SORT, label: "Most players" },
@@ -55,7 +61,9 @@ export function CollectionSortSelect({
 }: CollectionSortSelectProps) {
   const grouped = browse !== "cards";
   const options = grouped
-    ? [...GROUP_SORTS, ...(browse === "teams" ? TEAM_EXTRA : [])]
+    ? browse === "parallels"
+      ? PARALLEL_SORTS
+      : [...GROUP_SORTS, ...(browse === "teams" ? TEAM_EXTRA : [])]
     : CARD_SORTS;
 
   return (

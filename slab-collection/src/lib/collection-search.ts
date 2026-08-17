@@ -3,6 +3,8 @@ import {
   countUniqueTeamPlayers,
   duplicateGroupsOnly,
   groupByCardUuid,
+  groupByParallelFamily,
+  parallelGroupsOnly,
 } from "@/lib/collection-filters";
 import {
   TEAM_PLAYERS_SORT,
@@ -12,6 +14,7 @@ import { compareLastName, primarySubjectName } from "@/lib/names";
 import type {
   CardCopyOut,
   DuplicateGroupOut,
+  ParallelGroupOut,
   SetGroupOut,
   TeamGroupOut,
 } from "@/lib/slab/types";
@@ -207,6 +210,47 @@ export function duplicateGroupsFromCopies(
       sort,
       { ...a, name: primarySubjectName(a.card.subjects) },
       { ...b, name: primarySubjectName(b.card.subjects) },
+    );
+  });
+}
+
+export function parallelGroupsFromCopies(
+  copies: CardCopyOut[],
+  sort: GroupSortOption,
+): ParallelGroupOut[] {
+  const groups: ParallelGroupOut[] = parallelGroupsOnly(groupByParallelFamily(copies))
+    .filter((group) => group.card)
+    .map((group) => ({
+      family_key: group.familyKey,
+      card: group.card!,
+      printing_count: group.printingCount,
+      copy_count: group.totalCount,
+      total_value: groupValue(group.copies),
+      copies: group.copies,
+    }));
+
+  return groups.sort((a, b) => {
+    if (sort === "name" || sort === "-name") {
+      const names = compareLastName(
+        primarySubjectName(a.card.subjects),
+        primarySubjectName(b.card.subjects),
+      );
+      if (names !== 0) return sort === "-name" ? -names : names;
+      return (a.card.set_name ?? "").localeCompare(b.card.set_name ?? "");
+    }
+
+    return compareGroupSort(
+      sort,
+      {
+        ...a,
+        copy_count: a.printing_count,
+        name: primarySubjectName(a.card.subjects),
+      },
+      {
+        ...b,
+        copy_count: b.printing_count,
+        name: primarySubjectName(b.card.subjects),
+      },
     );
   });
 }

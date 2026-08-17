@@ -29,6 +29,7 @@ const BROWSE_OPTIONS: { id: CollectionBrowseMode; label: string }[] = [
   { id: "sets", label: "Sets" },
   { id: "teams", label: "Teams" },
   { id: "duplicates", label: "Duplicates" },
+  { id: "parallels", label: "Parallels" },
 ];
 
 // undefined = not known yet, which renders as the loading sheen. It must NOT fall back to 0: a
