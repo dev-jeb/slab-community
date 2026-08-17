@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 
-import { buildNewsPayload } from "@/lib/slab-news";
+import { fetchOwnedCardComps, NEWS_COMP_BATCH_MAX } from "@/lib/slab-news";
 import { SlabApiError } from "@/lib/slab/client";
 
 function handleError(error: unknown) {
   if (error instanceof SlabApiError) {
-    // Upstream 503 is Slab overloaded/timing out, not a missing local key.
     const status =
       error.status === 503 && !error.message.includes("SLAB_API_KEY")
         ? 504
@@ -18,10 +17,19 @@ function handleError(error: unknown) {
   return NextResponse.json({ detail: message }, { status });
 }
 
-export async function GET() {
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export async function POST(request: Request) {
   try {
-    const payload = await buildNewsPayload();
-    return NextResponse.json(payload);
+    const body = (await request.json()) as { cardUuids?: unknown };
+    const raw = Array.isArray(body.cardUuids) ? body.cardUuids : [];
+    const cardUuids = raw
+      .filter((value): value is string => typeof value === "string")
+      .filter((value) => UUID_RE.test(value))
+      .slice(0, NEWS_COMP_BATCH_MAX);
+
+    const comps = await fetchOwnedCardComps(cardUuids);
+    return NextResponse.json({ comps });
   } catch (error) {
     return handleError(error);
   }

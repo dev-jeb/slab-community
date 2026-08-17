@@ -105,6 +105,43 @@ export function saveCompsSnapshot(ownedCards: OwnedCardNews[]): void {
   window.localStorage.setItem(COMPS_KEY, JSON.stringify(snapshot));
 }
 
+/**
+ * First time we see a card, record it as the baseline so it doesn't fire a
+ * "new comp" alert. Used when expanding coverage from a partial snapshot.
+ */
+export function ensureCompsSnapshotIncludes(ownedCards: OwnedCardNews[]): void {
+  if (!canUseStorage()) return;
+
+  const existing = loadCompsSnapshot();
+  if (!existing) {
+    saveCompsSnapshot(ownedCards);
+    return;
+  }
+
+  let changed = false;
+  const cards = { ...existing.cards };
+
+  for (const card of ownedCards) {
+    if (cards[card.cardUuid]) continue;
+    cards[card.cardUuid] = {
+      total: card.comps.total,
+      latestSoldDate: card.comps.latest?.sold_date ?? null,
+      fmv: card.market?.fmv ?? null,
+      sampleSize: card.market?.sampleSize ?? null,
+      lowConfidence: card.market?.lowConfidence ?? null,
+    };
+    changed = true;
+  }
+
+  if (!changed) return;
+
+  const snapshot: CompsSnapshot = {
+    cards,
+    savedAt: existing.savedAt,
+  };
+  window.localStorage.setItem(COMPS_KEY, JSON.stringify(snapshot));
+}
+
 export function diffNewSets(
   sets: SetOut[],
   snapshot: SetsSnapshot | null,

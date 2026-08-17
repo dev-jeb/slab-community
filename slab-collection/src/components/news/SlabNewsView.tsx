@@ -143,6 +143,9 @@ export function SlabNewsView() {
   const {
     payload,
     isLoading,
+    isLoadingComps,
+    compsLoaded,
+    compsTotal,
     error,
     needsSetup,
     hasBaseline,
@@ -163,13 +166,19 @@ export function SlabNewsView() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-sm text-slate-400">
-            New packs imported into Slab and comp updates on cards you own.
+            New packs imported into Slab and comp updates on every unique card
+            you own.
           </p>
+          {isLoadingComps && compsTotal > 0 ? (
+            <p className="mt-1 text-xs text-slate-500">
+              Checking comps {compsLoaded} of {compsTotal} unique cards…
+            </p>
+          ) : null}
         </div>
         <button
           type="button"
           onClick={markAllSeen}
-          disabled={!payload}
+          disabled={!payload || isLoadingComps}
           className="rounded-lg border border-slate-700 bg-slate-900/60 px-4 py-2 text-sm text-slate-200 transition hover:border-slate-600 hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
         >
           Mark all as seen
