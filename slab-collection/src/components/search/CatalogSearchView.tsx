@@ -1,0 +1,460 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+
+import { CardListRow } from "@/components/collection/CardListRow";
+import { CardTile } from "@/components/collection/CardTile";
+import { CardFilterPills, type OwnershipFilter } from "@/components/collection/CardFilterPills";
+import { CollectionBrowseTabs } from "@/components/collection/CollectionBrowseTabs";
+import { SetupPrompt } from "@/components/collection/SetupPrompt";
+import { TeamLogo } from "@/components/collection/TeamLogo";
+import {
+  EmptyResults,
+  LoadMore,
+  ResultsSkeleton,
+  SearchToolbar,
+  SortSelect,
+  ViewToggleGroup,
+} from "@/components/search/SearchToolbar";
+import { formatApiDetail } from "@/lib/api-errors";
+import { rowFromCard } from "@/lib/card-row";
+import type {
+  CollectionBrowseMode,
+  CollectionFilter,
+} from "@/lib/collection-filters";
+import { prefetchPlayerImages } from "@/lib/player-image-cache";
+import { primarySubjectName } from "@/lib/names";
+import type {
+  CardSearchQuery,
+  CardSearchResult,
+  FacetCount,
+} from "@/lib/slab/types";
+
+/**
+ * The same search, pointed at the whole catalog instead of your shelf.
+ *
+ * It shares the collection view's tabs, filter pills and card renderers on purpose — the questions
+ * are identical ("McDavid rookies", "everything in this set") and only the answer set differs.
+ * Cards / Sets / Teams mean the same thing in both; the catalog just gets its groups from facet
+ * counts (the API counts them inside the current filter) instead of the collection's rollup
+ * endpoints, and has no Duplicates, since owning two of something is a collection fact.
+ *
+ * Everything is server-side here: text, filters, grouping and paging all go to the API. The
+ * catalog is far too large to load and sort in the browser.
+ */
+const PAGE_SIZE = 48;
+const FACET_LIMIT = 200;
+
+type ViewMode = "grid" | "list";
+
+/** The API's sort grammar (`-` prefix = descending). FMV isn't a catalog sort key. */
+type CatalogSort = "-year" | "year" | "card_number" | "subject" | "set";
+
+const SORT_OPTIONS: { value: CatalogSort; label: string }[] = [
+  { value: "-year", label: "Year (newest)" },
+  { value: "year", label: "Year (oldest)" },
+  { value: "set", label: "Set" },
+  { value: "card_number", label: "Card #: low to high" },
+  { value: "subject", label: "Last name (A–Z)" },
+];
+
+const CATALOG_MODES: CollectionBrowseMode[] = ["cards", "sets", "teams"];
+
+function filterParams(filter: CollectionFilter): Partial<CardSearchQuery> {
+  switch (filter) {
+    case "auto":
+      return { auto: true };
+    case "rookie":
+      return { rookie: true };
+    case "numbered":
+      return { is_numbered: true };
+    default:
+      return {};
+  }
+}
+
+function useIsMobile(): boolean {
+  const [mobile, setMobile] = useState(false);
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 767px)");
+    const update = () => setMobile(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+
+  return mobile;
+}
+
+export function CatalogSearchView() {
+  const [query, setQuery] = useState("");
+  const [submittedQuery, setSubmittedQuery] = useState("");
+  const [browse, setBrowse] = useState<CollectionBrowseMode>("cards");
+  const [filter, setFilter] = useState<CollectionFilter>("all");
+  const [ownership, setOwnership] = useState<OwnershipFilter>("any");
+  const [sort, setSort] = useState<CatalogSort>("-year");
+  const [view, setView] = useState<ViewMode>("list");
+  // Drill-downs from the Sets and Teams tabs. A set is filtered by slug, which the facet doesn't
+  // carry, so the name comes along to label the chip and the slug is resolved when it's picked.
+  const [pickedSet, setPickedSet] = useState<{ slug: string; name: string } | null>(
+    null,
+  );
+  const [pickedTeam, setPickedTeam] = useState<string | null>(null);
+  const [result, setResult] = useState<CardSearchResult | null>(null);
+  const [facets, setFacets] = useState<FacetCount[] | null>(null);
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [needsSetup, setNeedsSetup] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const isMobile = useIsMobile();
+
+  // Shared by every request this view makes, so the Sets and Teams tabs count exactly the cards
+  // the Cards tab would list.
+  const baseQuery = useMemo<CardSearchQuery>(
+    () => ({
+      q: submittedQuery.trim() || undefined,
+      ...filterParams(filter),
+      ...(ownership === "owned" ? { owned: true } : {}),
+      ...(pickedSet ? { set_slug: [pickedSet.slug] } : {}),
+      ...(pickedTeam ? { team: [pickedTeam] } : {}),
+    }),
+    [filter, ownership, pickedSet, pickedTeam, submittedQuery],
+  );
+
+  const fetchKey = `${browse}|${submittedQuery}|${filter}|${ownership}|${sort}|${pickedSet?.slug ?? ""}|${pickedTeam ?? ""}`;
+
+  const runSearch = useCallback(
+    async (offset: number): Promise<CardSearchResult | null> => {
+      const body: CardSearchQuery = {
+        ...baseQuery,
+        // Always one row per card SLOT. A player search otherwise returns the same card fifteen
+        // times, once per parallel, and buries every other card they have.
+        collapse_parallels: true,
+        sort,
+        limit: PAGE_SIZE,
+        offset,
+      };
+
+      const response = await fetch("/api/cards/search", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (response.status === 503) {
+        setNeedsSetup(true);
+        return null;
+      }
+
+      if (!response.ok) {
+        const payload = (await response.json()) as { detail?: unknown };
+        setError(formatApiDetail(payload.detail, "Catalog search failed"));
+        return null;
+      }
+
+      setNeedsSetup(false);
+      return (await response.json()) as CardSearchResult;
+    },
+    [baseQuery, sort],
+  );
+
+  const runFacets = useCallback(
+    async (dimension: "set" | "team"): Promise<CardSearchResult | null> => {
+      const response = await fetch("/api/cards/search", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ...baseQuery,
+          facets: dimension,
+          // The rows aren't rendered in a grouped view; only the counts are.
+          limit: 1,
+        }),
+      });
+
+      if (response.status === 503) {
+        setNeedsSetup(true);
+        return null;
+      }
+
+      if (!response.ok) {
+        const payload = (await response.json()) as { detail?: unknown };
+        setError(formatApiDetail(payload.detail, "Catalog search failed"));
+        return null;
+      }
+
+      setNeedsSetup(false);
+      return (await response.json()) as CardSearchResult;
+    },
+    [baseQuery],
+  );
+
+  useEffect(() => {
+    startTransition(async () => {
+      setError(null);
+
+      if (browse === "sets" || browse === "teams") {
+        const data = await runFacets(browse === "sets" ? "set" : "team");
+        if (data) {
+          const counts =
+            browse === "sets" ? data.facets?.set : data.facets?.team;
+          setFacets((counts ?? []).slice(0, FACET_LIMIT));
+          setResult(data);
+        }
+      } else {
+        const data = await runSearch(0);
+        if (data) setResult(data);
+      }
+
+      // Marked done even on failure: the error banner explains what happened, and a skeleton left
+      // spinning would suggest the request is still coming.
+      setLoadedKey(fetchKey);
+    });
+    // Keyed on fetchKey, not the callbacks: they're rebuilt on every render of the same query.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchKey]);
+
+  useEffect(() => {
+    if (browse !== "cards" || !result?.items?.length) return;
+
+    const names = [
+      ...new Set(
+        result.items
+          .map((card) => primarySubjectName(card.subjects))
+          .filter(Boolean),
+      ),
+    ];
+
+    void prefetchPlayerImages(names);
+  }, [browse, result?.items]);
+
+  const loadMore = useCallback(() => {
+    if (!result) return;
+
+    const loaded = result.items?.length ?? 0;
+    if (loaded >= result.total) return;
+
+    startTransition(async () => {
+      setError(null);
+      const data = await runSearch(loaded);
+      if (!data) return;
+
+      setResult((previous) => {
+        if (!previous) return data;
+        return {
+          ...previous,
+          total: data.total,
+          items: [...(previous.items ?? []), ...(data.items ?? [])],
+        };
+      });
+    });
+  }, [result, runSearch]);
+
+  const rows = useMemo(
+    () => (result?.items ?? []).map((card) => rowFromCard(card)),
+    [result?.items],
+  );
+
+  const awaitingData = loadedKey !== fetchKey;
+  const loadedCount = result?.items?.length ?? 0;
+  const hasMore = browse === "cards" && loadedCount < (result?.total ?? 0);
+
+  /** Picking a group drills into it: the Cards tab, narrowed to that set or team. */
+  function pickSet(name: string) {
+    void resolveSetSlug(name).then((slug) => {
+      if (!slug) {
+        setError(`Couldn't find the set "${name}" in the catalog.`);
+        return;
+      }
+      setPickedSet({ slug, name });
+      setBrowse("cards");
+    });
+  }
+
+  function pickTeam(team: string) {
+    setPickedTeam(team);
+    setBrowse("cards");
+  }
+
+  if (needsSetup) return <SetupPrompt />;
+
+  return (
+    <div className="space-y-6">
+      {error ? (
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-rose-200">
+          {error}
+        </div>
+      ) : null}
+
+      <SearchToolbar
+        query={query}
+        onQueryChange={setQuery}
+        onSubmit={() => setSubmittedQuery(query.trim())}
+        placeholder="Search the catalog — player, set, card number…"
+        isPending={isPending}
+        sort={
+          <SortSelect
+            value={sort}
+            onChange={setSort}
+            options={SORT_OPTIONS}
+            disabled={browse !== "cards"}
+          />
+        }
+        viewToggle={
+          <ViewToggleGroup
+            view={view}
+            onChange={setView}
+            hidden={browse !== "cards"}
+          />
+        }
+        tabs={
+          <CollectionBrowseTabs
+            value={browse}
+            onChange={setBrowse}
+            modes={CATALOG_MODES}
+            disabled={isPending}
+          />
+        }
+        filters={
+          <CardFilterPills
+            activeFilter={filter}
+            onFilterChange={setFilter}
+            ownership={ownership}
+            onOwnershipChange={setOwnership}
+            isPending={isPending}
+          />
+        }
+      />
+
+      {pickedSet || pickedTeam ? (
+        <div className="flex flex-wrap items-center gap-2">
+          {pickedSet ? (
+            <DrillChip
+              label={pickedSet.name}
+              onClear={() => setPickedSet(null)}
+            />
+          ) : null}
+          {pickedTeam ? (
+            <DrillChip label={pickedTeam} onClear={() => setPickedTeam(null)} />
+          ) : null}
+        </div>
+      ) : null}
+
+      {awaitingData ? (
+        <ResultsSkeleton />
+      ) : browse === "sets" || browse === "teams" ? (
+        <FacetList
+          kind={browse}
+          facets={facets ?? []}
+          onPick={browse === "sets" ? pickSet : pickTeam}
+        />
+      ) : rows.length > 0 ? (
+        view === "grid" && !isMobile ? (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {rows.map((row) => (
+              <CardTile key={row.key} row={row} />
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {rows.map((row) => (
+              <CardListRow key={row.key} row={row} compact={isMobile} />
+            ))}
+          </div>
+        )
+      ) : (
+        <EmptyResults>No cards match this search.</EmptyResults>
+      )}
+
+      {hasMore ? (
+        <LoadMore
+          loaded={loadedCount}
+          total={result?.total ?? 0}
+          isPending={isPending}
+          onLoadMore={loadMore}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Name → slug for a set the `set` facet named.
+ *
+ * Facets count by display name; the filter takes a slug. The set list is small (under a hundred)
+ * and already an endpoint, so one lookup resolves it rather than teaching the API a new filter.
+ */
+async function resolveSetSlug(name: string): Promise<string | null> {
+  const response = await fetch("/api/sets");
+  if (!response.ok) return null;
+
+  const data = (await response.json()) as {
+    sets: { name: string; slug: string }[];
+  };
+  return data.sets.find((set) => set.name === name)?.slug ?? null;
+}
+
+function FacetList({
+  kind,
+  facets,
+  onPick,
+}: {
+  kind: "sets" | "teams";
+  facets: FacetCount[];
+  onPick: (value: string) => void;
+}) {
+  if (facets.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed border-slate-700 px-6 py-16 text-center text-slate-400">
+        Nothing to group — no cards match this search.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {facets.map((facet) => (
+        <button
+          key={facet.value}
+          type="button"
+          onClick={() => onPick(facet.value)}
+          className="flex w-full items-center justify-between gap-4 rounded-xl border border-slate-800 bg-slate-900/60 px-5 py-3.5 text-left transition hover:border-sky-500/40 hover:bg-slate-900"
+        >
+          <div className="flex min-w-0 items-center gap-3">
+            {kind === "teams" ? <TeamLogo team={facet.value} size="sm" /> : null}
+            <p className="truncate font-medium text-white">{facet.value}</p>
+          </div>
+          <div className="flex shrink-0 items-center gap-4">
+            <span className="text-sm text-slate-400">
+              {facet.count.toLocaleString()} card
+              {facet.count === 1 ? "" : "s"}
+            </span>
+            <span className="text-xs text-sky-400">Show →</span>
+          </div>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function DrillChip({
+  label,
+  onClear,
+}: {
+  label: string;
+  onClear: () => void;
+}) {
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full border border-sky-400/40 bg-sky-400/10 py-1 pl-3 pr-2 text-sm text-sky-100">
+      {label}
+      <button
+        type="button"
+        onClick={onClear}
+        aria-label={`Clear ${label}`}
+        className="rounded-full px-1.5 text-sky-300 transition hover:bg-sky-400/20 hover:text-white"
+      >
+        ×
+      </button>
+    </span>
+  );
+}

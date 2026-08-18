@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 import { CardListRow } from "@/components/collection/CardListRow";
+import { rowFromCopy } from "@/lib/card-row";
 import { Sheen, SheenBar } from "@/components/ui/sheen";
 import { useGroupCopies } from "@/lib/use-group-copies";
 import { TeamLogo } from "@/components/collection/TeamLogo";
@@ -251,7 +252,7 @@ export function CollectionTeamGroups({
                   (copies ?? []).map((copy) => (
                     <CardListRow
                       key={`${expandedGroup.name}-${copy.uuid}`}
-                      copy={copy}
+                      row={rowFromCopy(copy)}
                     />
                   ))
                 )}

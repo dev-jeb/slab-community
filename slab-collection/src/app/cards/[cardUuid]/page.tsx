@@ -11,8 +11,10 @@ export default async function CardPage({
 
   return (
     <div className="space-y-6">
+      {/* Search, not the collection's default tab: a card detail is something you reached by
+          looking for it, so "back" should land on the finding tool, not the overview. */}
       <Link
-        href="/"
+        href="/?view=search"
         className="inline-flex text-sm text-slate-400 transition hover:text-slate-200"
       >
         ← Back

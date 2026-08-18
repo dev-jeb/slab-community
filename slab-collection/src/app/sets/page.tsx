@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+/** The product list is a scope of the one search page. */
 export default function SetsRedirectPage() {
-  redirect("/browse?tab=sets");
+  redirect("/search?scope=sets");
 }

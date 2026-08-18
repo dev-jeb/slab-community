@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { CardListRow } from "@/components/collection/CardListRow";
+import { rowFromCopy } from "@/lib/card-row";
 import { SheenBar, Sheen } from "@/components/ui/sheen";
 import { useGroupCopies } from "@/lib/use-group-copies";
 import { formatCurrency } from "@/lib/slab/format";
@@ -138,7 +139,7 @@ export function CollectionSetBanners({
                     </Sheen>
                   ) : (
                     (copies ?? []).map((copy) => (
-                      <CardListRow key={copy.uuid} copy={copy} />
+                      <CardListRow key={copy.uuid} row={rowFromCopy(copy)} />
                     ))
                   )}
                 </div>

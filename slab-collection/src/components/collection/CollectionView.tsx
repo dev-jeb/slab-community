@@ -5,14 +5,20 @@ import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
 import { CardListRow } from "@/components/collection/CardListRow";
 import { CardTile } from "@/components/collection/CardTile";
 import { CollectionDuplicateGroups } from "@/components/collection/CollectionDuplicateGroups";
-import { CollectionFilterSheet } from "@/components/collection/CollectionFilterSheet";
-import { CollectionFilterStats } from "@/components/collection/CollectionFilterStats";
+import { CardFilterPills } from "@/components/collection/CardFilterPills";
 import { CollectionParallelGroups } from "@/components/collection/CollectionParallelGroups";
 import { CollectionSetBanners } from "@/components/collection/CollectionSetBanners";
 import { CollectionTeamGroups } from "@/components/collection/CollectionTeamGroups";
 import { SetupPrompt } from "@/components/collection/SetupPrompt";
-import { SummaryBar } from "@/components/collection/SummaryBar";
+import {
+  EmptyResults,
+  LoadMore,
+  ResultsSkeleton,
+  SearchToolbar,
+  ViewToggleGroup,
+} from "@/components/search/SearchToolbar";
 import { formatApiDetail } from "@/lib/api-errors";
+import { rowFromCopy } from "@/lib/card-row";
 import {
   ownedCountByCardUuid,
   type CollectionBrowseMode,
@@ -54,19 +60,6 @@ import type { DashboardStats } from "@/lib/slab/types";
 
 type ViewMode = "grid" | "list";
 
-/** What the first summary stat is counting — groups in a grouped view, copies in Cards. */
-const TOTAL_LABELS: Record<CollectionBrowseMode, string> = {
-  cards: "Cards shown",
-  sets: "Sets shown",
-  teams: "Teams shown",
-  duplicates: "Duplicates shown",
-  parallels: "Parallels shown",
-};
-
-function isMobileViewport(): boolean {
-  return typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
-}
-
 function useIsMobile(): boolean {
   const [mobile, setMobile] = useState(false);
 
@@ -81,15 +74,28 @@ function useIsMobile(): boolean {
   return mobile;
 }
 
-export function CollectionView() {
+interface CollectionViewProps {
+  /** Opening browse mode — an Overview pill arrives here asking for its own view. */
+  initialBrowse?: CollectionBrowseMode;
+  /** Opening filter, same idea: "Autos 22" on the Overview opens search already narrowed. */
+  initialFilter?: CollectionFilter;
+}
+
+export function CollectionView({
+  initialBrowse,
+  initialFilter,
+}: CollectionViewProps = {}) {
   const [query, setQuery] = useState("");
   const [submittedQuery, setSubmittedQuery] = useState("");
   const [sort, setSort] = useState<CollectionSortOption>("value_desc");
   const [view, setView] = useState<ViewMode>("grid");
-  // Two independent axes: what you're looking at, and what's been narrowed out of it.
-  const [browse, setBrowse] = useState<CollectionBrowseMode>("cards");
-  const [filter, setFilter] = useState<CollectionFilter>("all");
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  // Two independent axes: what you're looking at, and what's been narrowed out of it. Both seed
+  // from the URL once, then belong to this component — the controls below are the way to change
+  // them, and rewriting the URL on every pill press would fill the history with view states.
+  const [browse, setBrowse] = useState<CollectionBrowseMode>(
+    initialBrowse ?? "cards",
+  );
+  const [filter, setFilter] = useState<CollectionFilter>(initialFilter ?? "all");
   const [result, setResult] = useState<CollectionResult | null>(null);
   const [groups, setGroups] = useState<GroupResult<unknown> | null>(null);
   const [groupSort, setGroupSort] = useState<GroupSortOption>("-value");
@@ -101,12 +107,6 @@ export function CollectionView() {
   const [needsSetup, setNeedsSetup] = useState(false);
   const [isPending, startTransition] = useTransition();
   const isMobile = useIsMobile();
-
-  useEffect(() => {
-    if (isMobileViewport()) {
-      setView("list");
-    }
-  }, []);
 
   // Three shapes of request, decided by the browse mode, sort, and search (see collection-paging):
   //   grouped   -> its own endpoint, which rolls up and pages the GROUPS
@@ -308,22 +308,6 @@ export function CollectionView() {
     [result?.items],
   );
 
-  // For a grouped view this is the number of groups, which is what those views label.
-  const displayTotal =
-    browse === "parallels"
-      ? visibleParallelGroups.length
-      : groupKind
-        ? searching
-          ? groupKind === "sets"
-            ? visibleSetGroups.length
-            : groupKind === "teams"
-              ? visibleTeamGroups.length
-              : visibleDuplicateGroups.length
-          : (groups?.total ?? 0)
-        : paged
-          ? (result?.total ?? 0)
-          : items.length;
-
   const highlightCardNumber =
     sort === "card_number_asc" || sort === "card_number_desc";
 
@@ -332,11 +316,6 @@ export function CollectionView() {
 
   // Each handler only moves state; the effect above decides whether that state change actually
   // needs a new request. Previously these fired a fetch AND changed state, which refetched twice.
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setSubmittedQuery(query.trim());
-  }
-
   function handleSortChange(nextSort: CollectionSortOption) {
     setSort(nextSort);
   }
@@ -355,252 +334,109 @@ export function CollectionView() {
 
   return (
     <div className="space-y-6">
-      <div className="sticky top-0 z-20 -mx-4 space-y-3 border-b border-slate-800 bg-[#0b1120]/95 px-4 py-3 backdrop-blur md:hidden">
-        <form onSubmit={handleSubmit} className="flex gap-2">
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search player, set, subset, parallel…"
-            className="min-w-0 flex-1 rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-white outline-none focus:border-sky-500/50"
-          />
-          <button
-            type="submit"
-            disabled={isPending}
-            className="rounded-xl bg-sky-500 px-4 py-3 font-medium text-slate-950 hover:bg-sky-400 disabled:opacity-60"
-          >
-            Go
-          </button>
-        </form>
-        <button
-          type="button"
-          onClick={() => setFiltersOpen(true)}
-          className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm text-slate-200"
-        >
-          Filters & sort
-          {filter !== "all" ? (
-            <span className="ml-2 text-sky-400">· filtered</span>
-          ) : null}
-        </button>
-      </div>
-
-      <CollectionFilterSheet
-        open={filtersOpen}
-        onClose={() => setFiltersOpen(false)}
-        sort={sort}
-        onSortChange={handleSortChange}
-        view={view}
-        onViewChange={setView}
-        browse={browse}
-        onBrowseChange={handleBrowseChange}
-        filter={filter}
-        onFilterChange={handleFilterChange}
-        stats={stats}
-        isPending={isPending}
-        showViewToggle={showViewToggle}
-      />
-
       {error ? (
         <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-rose-200">
           {error}
         </div>
       ) : null}
 
-      {result || groups ? (
-        <>
-          <SummaryBar
-            summary={result?.summary}
-            total={awaitingData ? undefined : displayTotal}
-            totalLabel={TOTAL_LABELS[browse]}
+      <SearchToolbar
+        query={query}
+        onQueryChange={setQuery}
+        onSubmit={() => setSubmittedQuery(query.trim())}
+        placeholder="Search your cards — player, set, subset, parallel…"
+        isPending={isPending}
+        sort={
+          <CollectionSortSelect
+            browse={browse}
+            cardSort={sort}
+            onCardSortChange={handleSortChange}
+            groupSort={groupSort}
+            onGroupSortChange={setGroupSort}
           />
+        }
+        viewToggle={
+          <ViewToggleGroup
+            view={view}
+            onChange={setView}
+            hidden={!showViewToggle}
+          />
+        }
+        tabs={
+          <CollectionBrowseTabs
+            value={browse}
+            onChange={handleBrowseChange}
+            counts={{
+              cards: stats?.total_cards,
+              sets: uniqueSetCount,
+              teams: stats?.teams,
+              duplicates: duplicateCount,
+              parallels: parallelCount,
+            }}
+            disabled={isPending}
+          />
+        }
+        filters={
+          <CardFilterPills
+            counts={{
+              auto: stats?.autos,
+              rookie: stats?.rookies,
+              numbered: stats?.numbered,
+            }}
+            activeFilter={filter}
+            onFilterChange={handleFilterChange}
+            isPending={isPending}
+          />
+        }
+      />
 
-          {/* One control band: what you're searching and sorting on the left, what you're
-              looking at on the right. Both were full-width rows before, stacked, which left a
-              wide empty gutter beside the pills and pushed the cards down twice. */}
-          <div className="hidden items-start justify-between gap-6 md:flex">
-            <form
-              onSubmit={handleSubmit}
-              className="flex min-w-0 max-w-xl flex-1 flex-col gap-2"
-            >
-              <div className="flex gap-2">
-                <input
-                  type="search"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search player, set, subset, parallel…"
-                  className="min-w-0 flex-1 rounded-xl border border-slate-800 bg-slate-950 px-4 py-2 text-white outline-none focus:border-sky-500/50"
-                />
-                <button
-                  type="submit"
-                  disabled={isPending}
-                  className="shrink-0 rounded-xl bg-sky-500 px-4 py-2 font-medium text-slate-950 hover:bg-sky-400 disabled:opacity-60"
-                >
-                  {isPending ? "Searching…" : "Search"}
-                </button>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3">
-                <CollectionSortSelect
-                  browse={browse}
-                  cardSort={sort}
-                  onCardSortChange={handleSortChange}
-                  groupSort={groupSort}
-                  onGroupSortChange={setGroupSort}
-                />
-
-                {/* Kept in the layout when it doesn't apply, just hidden. Unmounting it made
-                    the row reflow every time you switched between Cards and a grouped view. */}
-                <div
-                  className={`flex gap-2 ${showViewToggle ? "" : "invisible"}`}
-                  aria-hidden={!showViewToggle}
-                >
-                  <ViewToggle
-                    active={view === "grid"}
-                    onClick={() => setView("grid")}
-                    label="Grid"
-                  />
-                  <ViewToggle
-                    active={view === "list"}
-                    onClick={() => setView("list")}
-                    label="List"
-                  />
-                </div>
-              </div>
-            </form>
-
-            <div className="flex shrink-0 flex-col items-end gap-2">
-            <CollectionBrowseTabs
-              value={browse}
-              onChange={handleBrowseChange}
-              counts={{
-                cards: stats?.total_cards,
-                sets: uniqueSetCount,
-                teams: stats?.teams,
-                duplicates: duplicateCount,
-                parallels: parallelCount,
-              }}
-              disabled={isPending}
-            />
-            <CollectionFilterStats
-              stats={stats}
-              activeFilter={filter}
-              onFilterChange={handleFilterChange}
-              isPending={isPending}
-            />
-            </div>
+      {(groupKind || browse === "parallels") && awaitingData ? (
+        <GroupSkeleton />
+      ) : groupKind === "teams" ? (
+        <CollectionTeamGroups groups={visibleTeamGroups} sort={groupSort} />
+      ) : groupKind === "sets" ? (
+        <CollectionSetBanners groups={visibleSetGroups} />
+      ) : groupKind === "duplicates" ? (
+        <CollectionDuplicateGroups groups={visibleDuplicateGroups} />
+      ) : browse === "parallels" ? (
+        <CollectionParallelGroups groups={visibleParallelGroups} />
+      ) : awaitingData ? (
+        <ResultsSkeleton />
+      ) : items.length > 0 ? (
+        view === "grid" && !isMobile ? (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {items.map((copy) => (
+              <CardTile
+                key={copy.uuid}
+                row={rowFromCopy(copy, ownedTotals.get(copy.card_uuid))}
+                highlightChecklist={highlightCardNumber}
+              />
+            ))}
           </div>
+        ) : (
+          <div className="space-y-3">
+            {items.map((copy) => (
+              <CardListRow
+                key={copy.uuid}
+                row={rowFromCopy(copy, ownedTotals.get(copy.card_uuid))}
+                highlightChecklist={highlightCardNumber}
+                compact={isMobile}
+              />
+            ))}
+          </div>
+        )
+      ) : (
+        <EmptyResults>No cards match this search.</EmptyResults>
+      )}
 
-          {(groupKind || browse === "parallels") && awaitingData ? (
-            <GroupSkeleton />
-          ) : groupKind === "teams" ? (
-            <CollectionTeamGroups
-              groups={visibleTeamGroups}
-              sort={groupSort}
-            />
-          ) : groupKind === "sets" ? (
-            <CollectionSetBanners
-              groups={visibleSetGroups}
-            />
-          ) : groupKind === "duplicates" ? (
-            <CollectionDuplicateGroups
-              groups={visibleDuplicateGroups}
-            />
-          ) : browse === "parallels" ? (
-            <CollectionParallelGroups
-              groups={visibleParallelGroups}
-            />
-          ) : awaitingData ? (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {Array.from({ length: 8 }).map((_, index) => (
-                <div
-                  key={index}
-                  className="sheen aspect-[3/5] rounded-xl border border-slate-800 bg-slate-900/40"
-                />
-              ))}
-            </div>
-          ) : items.length > 0 ? (
-            view === "grid" ? (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {items.map((copy) => (
-                  <CardTile
-                    key={copy.uuid}
-                    copy={copy}
-                    highlightChecklist={highlightCardNumber}
-                    ownedTotal={ownedTotals.get(copy.card_uuid)}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {items.map((copy) => (
-                  <CardListRow
-                    key={copy.uuid}
-                    copy={copy}
-                    highlightChecklist={highlightCardNumber}
-                    ownedTotal={ownedTotals.get(copy.card_uuid)}
-                    compact={isMobile}
-                  />
-                ))}
-              </div>
-            )
-          ) : (
-            <div className="rounded-xl border border-dashed border-slate-700 px-6 py-16 text-center text-slate-400">
-              {filter === "all"
-                ? "No cards found. Try a different search or sort."
-                : "No cards match this filter."}
-            </div>
-          )}
-
-          {hasMore ? (
-            <div className="flex flex-col items-center gap-2 pt-2">
-              <p className="text-xs text-slate-500">
-                Showing {loadedCount} of {result?.total ?? 0}
-              </p>
-              <button
-                type="button"
-                onClick={loadMore}
-                disabled={isPending}
-                className="rounded-xl border border-slate-800 bg-slate-900/50 px-6 py-3 text-sm text-slate-200 transition hover:border-slate-600 hover:bg-slate-900/80 disabled:opacity-60"
-              >
-                {isPending ? "Loading…" : "Load more"}
-              </button>
-            </div>
-          ) : null}
-        </>
-      ) : isPending ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {Array.from({ length: 8 }).map((_, index) => (
-            <div
-              key={index}
-              className="sheen aspect-[3/5] rounded-xl border border-slate-800 bg-slate-900/40"
-            />
-          ))}
-        </div>
+      {hasMore ? (
+        <LoadMore
+          loaded={loadedCount}
+          total={result?.total ?? 0}
+          isPending={isPending}
+          onLoadMore={loadMore}
+        />
       ) : null}
     </div>
-  );
-}
-
-function ViewToggle({
-  active,
-  onClick,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-lg border px-3 py-2 text-sm ${
-        active
-          ? "border-sky-500/50 bg-sky-500/10 text-sky-200"
-          : "border-slate-800 text-slate-400 hover:border-slate-600"
-      }`}
-    >
-      {label}
-    </button>
   );
 }

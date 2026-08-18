@@ -5,26 +5,33 @@ import { usePathname } from "next/navigation";
 
 import { useNews } from "@/components/news/NewsProvider";
 
+// "My Collection" and not "Collection": every page here is about your cards, so the bare noun
+// didn't distinguish this one from Browse (the catalog) or Chase Sets. The possessive does.
+// "My Collection" and not "Collection": every page here is about your cards, so the bare noun
+// didn't distinguish this one from Search (which also covers the catalog) or Chase Sets. The
+// possessive does. Browse is gone — it was a second, weaker search, and is now Search's catalog
+// scope.
 const links = [
-  { href: "/", label: "Collection" },
+  { href: "/", label: "My Collection" },
+  { href: "/search", label: "Search" },
   { href: "/chase", label: "Chase Sets" },
-  { href: "/browse", label: "Browse" },
-  { href: "/portfolio", label: "Portfolio" },
+  { href: "/sales", label: "Sales" },
   { href: "/news", label: "Alerts", showBadge: true },
 ];
 
 export const pageTitles: Record<string, string> = {
-  "/": "Collection",
+  "/": "My Collection",
+  "/search": "Search",
   "/chase": "Chase Sets",
-  "/browse": "Browse",
-  "/portfolio": "Portfolio",
+  "/sales": "Sales",
   "/news": "Alerts",
 };
 
 export function pageTitleForPath(pathname: string): string {
   if (pathname.startsWith("/cards/")) return "Card detail";
-  if (pathname.startsWith("/portfolio")) return "Portfolio";
-  if (pathname.startsWith("/browse")) return "Browse";
+  if (pathname.startsWith("/search")) return "Search";
+  if (pathname.startsWith("/sales")) return "Sales";
+  if (pathname.startsWith("/players")) return "Player pricing";
   if (pathname.startsWith("/chase")) return "Chase Sets";
   return pageTitles[pathname] ?? "Slab Collection";
 }

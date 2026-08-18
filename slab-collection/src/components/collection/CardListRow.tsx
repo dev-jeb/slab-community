@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { CopyStatusBadge } from "@/components/collection/CopyStatusBadge";
-import type { CardCopyOut } from "@/lib/slab/types";
+import type { CardRow } from "@/lib/card-row";
 import {
   cardSubtitle,
   cardTitle,
@@ -15,50 +15,73 @@ import { PriceConfidenceBadge } from "@/components/collection/PriceConfidenceBad
 import { PlayerAvatar, primarySubjectName } from "@/components/collection/PlayerAvatar";
 
 interface CardListRowProps {
-  copy: CardCopyOut;
+  row: CardRow;
   highlightChecklist?: boolean;
   highlightSerial?: boolean;
-  ownedTotal?: number;
   compact?: boolean;
 }
 
+/**
+ * One card, as a row. Same two shapes as CardTile: a copy you own, or a catalog printing.
+ *
+ * The last three columns are the ones that change. A copy reports serial / market / cost basis /
+ * unrealized; a catalog printing reports print run / market / whether you own one — because
+ * "do I have this?" is the question you're asking when the table is pointed at the whole catalog.
+ */
 export function CardListRow({
-  copy,
+  row,
   highlightChecklist = false,
   highlightSerial = false,
-  ownedTotal,
   compact = false,
 }: CardListRowProps) {
-  const card = copy.card;
-  const fmv = copy.market?.fair_market_value;
-  const gain = copy.market?.unrealized_gain_loss;
+  const { card, copy } = row;
   const playerName = primarySubjectName(card?.subjects);
   const checklist = setChecklistNumber(card);
-  const ownedSerial = ownedSerialLabel(copy);
+  const ownedSerial = copy ? ownedSerialLabel(copy) : null;
+  const owned = row.ownedCount ?? 0;
+
+  const ownedBadge =
+    owned > 1 || (!copy && owned > 0) ? (
+      <span className="rounded-full border border-emerald-400/40 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-medium text-emerald-200">
+        {copy ? `×${owned}` : `Owned ×${owned}`}
+      </span>
+    ) : null;
 
   if (compact) {
     return (
       <Link
-        href={`/cards/${copy.card_uuid}`}
+        href={`/cards/${row.cardUuid}`}
         className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/50 p-3 transition hover:border-sky-500/40 hover:bg-slate-900/70"
       >
         <PlayerAvatar name={playerName} size="sm" />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <p className="truncate font-medium text-white">{cardTitle(card)}</p>
-            <CopyStatusBadge copy={copy} />
-            {ownedTotal && ownedTotal > 1 ? (
-              <span className="rounded-full border border-emerald-400/40 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-medium text-emerald-200">
-                ×{ownedTotal}
-              </span>
-            ) : null}
+            {copy ? <CopyStatusBadge copy={copy} /> : null}
+            {ownedBadge}
           </div>
           <p className="mt-0.5 truncate text-sm text-slate-400">{cardSubtitle(card)}</p>
-          <p className="mt-1 text-xs text-slate-500">{gradeLabel(copy)}</p>
+          <p className="mt-1 text-xs text-slate-500">
+            {copy ? gradeLabel(copy) : (card?.set_name ?? "")}
+          </p>
         </div>
         <div className="shrink-0 text-right">
-          <p className="font-medium text-white">{formatCurrency(fmv)}</p>
-          <p className="mt-1 text-xs text-slate-500">{formatSignedCurrency(gain)}</p>
+          {copy ? (
+            <>
+              <p className="font-medium text-white">{formatCurrency(row.fmv)}</p>
+              <p className="mt-1 text-xs text-slate-500">
+                {formatSignedCurrency(copy.market?.unrealized_gain_loss)}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-slate-300">
+                {row.printingCount ?? 1} printing
+                {(row.printingCount ?? 1) === 1 ? "" : "s"}
+              </p>
+              <p className="mt-1 text-xs text-sky-400">Prices →</p>
+            </>
+          )}
         </div>
       </Link>
     );
@@ -66,7 +89,7 @@ export function CardListRow({
 
   return (
     <Link
-      href={`/cards/${copy.card_uuid}`}
+      href={`/cards/${row.cardUuid}`}
       className="grid gap-3 rounded-xl border border-slate-800 bg-slate-900/50 p-4 transition hover:border-sky-500/40 hover:bg-slate-900/70 lg:grid-cols-[auto_minmax(0,2fr)_repeat(5,minmax(0,1fr))] lg:items-center"
     >
       <PlayerAvatar name={playerName} size="sm" />
@@ -74,15 +97,18 @@ export function CardListRow({
       <div>
         <div className="flex flex-wrap items-center gap-2">
           <p className="font-medium text-white">{cardTitle(card)}</p>
-          <CopyStatusBadge copy={copy} />
-          {ownedTotal && ownedTotal > 1 ? (
-            <span className="rounded-full border border-emerald-400/40 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-medium text-emerald-200">
-              ×{ownedTotal}
+          {copy ? <CopyStatusBadge copy={copy} /> : null}
+          {ownedBadge}
+          {row.printingCount && row.printingCount > 1 ? (
+            <span className="rounded-full border border-slate-600 px-2 py-0.5 text-[10px] font-medium text-slate-300">
+              {row.printingCount} printings
             </span>
           ) : null}
         </div>
         <p className="mt-1 text-sm text-slate-400">{cardSubtitle(card)}</p>
-        <p className="mt-1 text-xs text-slate-500">{gradeLabel(copy)}</p>
+        <p className="mt-1 text-xs text-slate-500">
+          {copy ? gradeLabel(copy) : [card?.brand, card?.season].filter(Boolean).join(" · ")}
+        </p>
       </div>
 
       <div>
@@ -96,41 +122,79 @@ export function CardListRow({
         </p>
       </div>
 
-      <div>
-        <p className="text-[10px] uppercase tracking-wider text-slate-500">
-          Serial #
-        </p>
-        <p
-          className={`mt-1 ${highlightSerial ? "text-lg font-bold text-amber-300" : "text-white"}`}
-        >
-          {ownedSerial ?? "—"}
-        </p>
-      </div>
+      {/* Serial, price, basis and P&L all describe a single printing you hold. A catalog row is a
+          card with its parallels folded in, so it reports what's true of the whole slot and sends
+          you to the card for the per-printing money. */}
+      {copy ? (
+        <>
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-slate-500">
+              Serial #
+            </p>
+            <p
+              className={`mt-1 ${highlightSerial ? "text-lg font-bold text-amber-300" : "text-white"}`}
+            >
+              {ownedSerial ?? "—"}
+            </p>
+          </div>
 
-      <div>
-        <p className="text-[10px] uppercase tracking-wider text-slate-500">
-          Market value
-        </p>
-        <p className="mt-1 font-medium text-white">{formatCurrency(fmv)}</p>
-        <PriceConfidenceBadge
-          sampleSize={copy.market?.sample_size}
-          lowConfidence={copy.market?.low_confidence}
-        />
-      </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-slate-500">
+              Market value
+            </p>
+            <p className="mt-1 font-medium text-white">{formatCurrency(row.fmv)}</p>
+            <PriceConfidenceBadge
+              sampleSize={row.sampleSize ?? undefined}
+              lowConfidence={row.lowConfidence ?? undefined}
+            />
+          </div>
 
-      <div>
-        <p className="text-[10px] uppercase tracking-wider text-slate-500">
-          Cost basis
-        </p>
-        <p className="mt-1 text-white">{formatCurrency(copy.cost_basis)}</p>
-      </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-slate-500">
+              Cost basis
+            </p>
+            <p className="mt-1 text-white">{formatCurrency(copy.cost_basis)}</p>
+          </div>
 
-      <div>
-        <p className="text-[10px] uppercase tracking-wider text-slate-500">
-          Unrealized
-        </p>
-        <p className="mt-1 text-white">{formatSignedCurrency(gain)}</p>
-      </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-slate-500">
+              Unrealized
+            </p>
+            <p className="mt-1 text-white">
+              {formatSignedCurrency(copy.market?.unrealized_gain_loss)}
+            </p>
+          </div>
+        </>
+      ) : (
+        <>
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-slate-500">
+              Subset
+            </p>
+            <p className="mt-1 truncate text-white">{card?.subset ?? "—"}</p>
+          </div>
+
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-slate-500">
+              Printings
+            </p>
+            <p className="mt-1 text-white">{row.printingCount ?? 1}</p>
+          </div>
+
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-slate-500">
+              Owned
+            </p>
+            <p
+              className={`mt-1 font-medium ${owned > 0 ? "text-emerald-300" : "text-slate-500"}`}
+            >
+              {owned > 0 ? `×${owned}` : "—"}
+            </p>
+          </div>
+
+          <div className="text-sm text-sky-400">Prices &amp; sales →</div>
+        </>
+      )}
     </Link>
   );
 }

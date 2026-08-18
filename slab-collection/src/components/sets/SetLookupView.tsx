@@ -3,6 +3,12 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 
 import { SetupPrompt } from "@/components/collection/SetupPrompt";
+import {
+  EmptyResults,
+  ResultsSkeleton,
+  SearchToolbar,
+  SortSelect,
+} from "@/components/search/SearchToolbar";
 import { SetsCatalogTable } from "@/components/sets/SetsCatalogTable";
 import { setSearchText } from "@/lib/set-label";
 import {
@@ -15,11 +21,15 @@ import {
 } from "@/lib/slab-news-snapshot";
 import type { SetOut } from "@/lib/slab/types";
 
-interface SetLookupViewProps {
-  embedded?: boolean;
-}
+const SORT_OPTIONS: { value: SetLookupSort; label: string }[] = [
+  { value: "year_desc", label: "Year (newest)" },
+  { value: "year_asc", label: "Year (oldest)" },
+  { value: "cards_desc", label: "Most cards" },
+  { value: "priced_desc", label: "Most priced cards" },
+  { value: "pct_priced_desc", label: "% Priced" },
+];
 
-export function SetLookupView({ embedded = false }: SetLookupViewProps) {
+export function SetLookupView() {
   const [sets, setSets] = useState<SetOut[]>([]);
   const [query, setQuery] = useState("");
   const [setSort, setSetSort] = useState<SetLookupSort>("year_desc");
@@ -67,55 +77,40 @@ export function SetLookupView({ embedded = false }: SetLookupViewProps) {
 
   return (
     <div className="space-y-6">
-      {!embedded ? (
-        <p className="text-sm text-slate-400">
-          Browse every set loaded in Slab. Search by name, brand, season, year, or
-          sport.
-        </p>
-      ) : null}
-
-      <div className="flex flex-wrap items-center gap-4">
-        <input
-          type="search"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search sets…"
-          className="w-full max-w-md rounded-lg border border-slate-700 bg-slate-900/60 px-4 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-sky-500/50 focus:outline-none focus:ring-1 focus:ring-sky-500/30"
-        />
-        <label className="flex items-center gap-2 text-sm text-slate-400">
-          <span>Sort</span>
-          <select
-            value={setSort}
-            onChange={(event) =>
-              setSetSort(event.target.value as SetLookupSort)
-            }
-            className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-white"
-          >
-            <option value="year_desc">Year (newest)</option>
-            <option value="year_asc">Year (oldest)</option>
-            <option value="cards_desc">Most cards</option>
-            <option value="priced_desc">Most priced cards</option>
-            <option value="pct_priced_desc">% Priced</option>
-          </select>
-        </label>
-        <span className="text-sm text-slate-400">
-          {filteredSets.length} of {sets.length} sets
-        </span>
-      </div>
-
-      {isPending && !sets.length ? (
-        <div className="h-64 animate-pulse rounded-xl bg-slate-900" />
-      ) : (
-        <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
-          <SetsCatalogTable sets={filteredSets} newSetUuids={newSetUuids} />
-        </section>
-      )}
-
       {error ? (
         <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-rose-200">
           {error}
         </div>
       ) : null}
+
+      {/* The same band the card scopes wear. A product has no autos, no rookies and no grid view,
+          so those slots go unfilled — the geometry that remains is identical. Typing filters as you
+          go here (the whole list is already in the browser); the button is the same affordance in
+          the same place for when you'd rather press it. */}
+      <SearchToolbar
+        query={query}
+        onQueryChange={setQuery}
+        onSubmit={() => undefined}
+        placeholder="Search products — name, brand, season…"
+        isPending={isPending}
+        sort={
+          <SortSelect
+            value={setSort}
+            onChange={setSetSort}
+            options={SORT_OPTIONS}
+          />
+        }
+      />
+
+      {isPending && !sets.length ? (
+        <ResultsSkeleton />
+      ) : filteredSets.length ? (
+        <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
+          <SetsCatalogTable sets={filteredSets} newSetUuids={newSetUuids} />
+        </section>
+      ) : (
+        <EmptyResults>No products match this search.</EmptyResults>
+      )}
     </div>
   );
 }

@@ -101,24 +101,55 @@ Refresh the site after adding cards.
 
 ## Features
 
-### Collection (`/`)
+### My Collection (`/`)
 
-Your personal card gallery backed by Slab's collection search.
+The dashboard: how the collection is doing and what's in it. Nothing to operate.
 
-- **Grid, list, and set-grouped views**
-- **Sort** by value, price confidence, card number, or player last name
-- **Price confidence badges** — comp count and high / moderate / low confidence
-- **Player headshots** where available
-- Portfolio summary bar (total value, cost basis, unrealized gain)
-
-### Portfolio (`/portfolio`)
-
-Dashboard for collection-level financials.
-
-- Total portfolio value, cost basis, ROI, and 7-day change
+- Total portfolio value, cost basis, unrealized P&L, ROI, and 7-day change
 - **Value history chart** (daily or weekly)
-- Breakdowns: autos, rookies, numbered, graded vs raw
-- Most valuable cards and top sets by copy count
+- **What's in it** — cards, sets, teams, duplicates, autos, rookies, numbered, graded vs raw;
+  each count opens that slice in Search
+- Most valuable cards and top sets by value
+
+`/portfolio` redirects here; it was a second, smaller copy of the same figures.
+
+### Search (`/search`)
+
+One table, three scopes: **My Collection**, **Catalog**, **Sets**. All three wear the same control
+band (`SearchToolbar`) — search box and button, sort and view toggle beneath, view tabs and filter
+pills on the right — plus the same skeleton, empty state, and paging footer. A scope fills in only
+the controls that mean something to it; the rest of the geometry lines up by construction.
+
+**My Collection** (default) — the cards you own.
+
+- **Cards, Sets, Teams, and Duplicates** views
+- **Grid and list** layouts
+- **Sort** by value, price confidence, card number, or player last name
+- **Filter** by auto, rookie, or numbered
+- Per-copy money on every row: market value, cost basis, unrealized P&L
+- **Price confidence badges** — comp count and high / moderate / low confidence
+
+**Catalog** — every card Slab knows about.
+
+- **One row per card, always** — parallels are folded in, so a player search isn't the same card
+  fifteen times. The row carries only what's true of the whole card (player, set, subset, number,
+  how many printings exist); price, print run and odds belong to a *printing*, so they live on the
+  card page, where each parallel has its own FMV, comps, and history
+- **Owned** pill — rows are stamped with the copies you own, and the pill narrows to just those
+- **Sets and Teams** tabs group the matching cards by product or team (facet counts), and picking
+  one drills into it
+- **Sort** by year, set, card number, or player
+
+**Sets** — the products themselves, searchable by name, brand, season, year, or sport, with card
+counts and pricing coverage. No card filters or grid view, because a product has neither. (Not the
+same as the catalog's *Sets tab*, which groups matching cards by the product they came from.)
+
+`/browse` and `/sets` redirect here. One-player pricing (`/players`) keeps its own page, linked from
+the catalog scope.
+
+### Sales (`/sales`)
+
+Listings and realized gains from cards you've sold. (Was `/portfolio?tab=sales`.)
 
 ### Player Lookup (`/players`)
 

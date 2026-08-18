@@ -6,27 +6,31 @@ import { useState } from "react";
 
 import { useNews } from "@/components/news/NewsProvider";
 
+// Portfolio was a primary tab because it was where the money lived; it's the My Collection
+// dashboard now. Search takes the freed slot — it's the one screen you open with a question, and
+// it covers the catalog as well as your shelf. Sales and player pricing are occasional, so they
+// sit under More.
 const primaryTabs = [
   {
     href: "/",
-    label: "Collection",
+    label: "My Collection",
     match: (path: string) => path === "/" || path.startsWith("/cards/"),
+  },
+  {
+    href: "/search",
+    label: "Search",
+    match: (path: string) => path.startsWith("/search"),
   },
   {
     href: "/chase",
     label: "Chase Sets",
     match: (path: string) => path.startsWith("/chase"),
   },
-  {
-    href: "/portfolio",
-    label: "Portfolio",
-    match: (path: string) =>
-      path.startsWith("/portfolio") || path.startsWith("/sales"),
-  },
 ];
 
 const moreLinks = [
-  { href: "/browse", label: "Browse" },
+  { href: "/sales", label: "Sales" },
+  { href: "/players", label: "Player pricing" },
   { href: "/news", label: "Alerts", showBadge: true },
 ];
 

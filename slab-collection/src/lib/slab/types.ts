@@ -36,6 +36,10 @@ export interface CardOut {
   release_set_name?: string | null;
   subjects: SubjectOut[];
   attributes: AttributeOut[];
+  /** Copies the queried collector owns. Only set when the search passed a `collector`. */
+  owned_quantity?: number | null;
+  /** Printings in this card's slot, base included. Only set under `collapse_parallels`. */
+  printing_count?: number | null;
   market?: FmvSummary | null;
 }
 
@@ -222,16 +226,36 @@ export interface SealedProductOut {
   low_confidence?: boolean | null;
 }
 
+/** A value and how many results carry it, within the current filter set. */
+export interface FacetCount {
+  value: string;
+  count: number;
+}
+
+/** Only the dimensions a search asked for are populated. */
+export interface Facets {
+  brand?: FacetCount[] | null;
+  year?: FacetCount[] | null;
+  set?: FacetCount[] | null;
+  subset?: FacetCount[] | null;
+  finish?: FacetCount[] | null;
+  team?: FacetCount[] | null;
+  attribute?: FacetCount[] | null;
+}
+
 export interface CardSearchResult {
   total: number;
   limit: number;
   offset: number;
   items?: CardOut[];
+  facets?: Facets | null;
 }
 
 export interface CardSearchQuery {
   q?: string | null;
   subject?: string | null;
+  /** Exact card number (e.g. YG-201). With `set_slug`, this is one card slot. */
+  card_number?: string | null;
   set_slug?: string[] | null;
   release?: string[] | null;
   team?: string[] | null;
@@ -247,6 +271,16 @@ export interface CardSearchQuery {
   relic?: boolean;
   is_numbered?: boolean;
   subset?: string[];
+  /** Collector UUID — annotates each row with `owned_quantity`. Filled in server-side. */
+  collector?: string | null;
+  /** With `collector`: true = only cards you own, false = only ones you don't. */
+  owned?: boolean | null;
+  /** Comma-separated facet dimensions to count: brand, year, set, subset, finish, team, attribute. */
+  facets?: string | null;
+  /** One row per card SLOT instead of one per printing; the row carries `printing_count`. */
+  collapse_parallels?: boolean;
+  /** Sort key, `-` prefix for descending: year, card_number, numbered, subject, brand, set. */
+  sort?: string | null;
   limit?: number;
   offset?: number;
 }

@@ -4,6 +4,8 @@ import {
   getCardMarket,
   getCardParallels,
   getCardPriceHistory,
+  searchCards,
+  searchCollection,
 } from "@/lib/slab/client";
 import type {
   CardComps,
@@ -119,44 +121,36 @@ function indexOwnedCopies(
   return index;
 }
 
-async function enrichParallels(
+function summarizeParallels(
   parallels: CardOut[],
+  fmvByUuid: Map<string, string | null>,
   ownedIndex: Map<string, CardCopyOut[]>,
-): Promise<ParallelSummary[]> {
-  const batchSize = 4;
-  const summaries: ParallelSummary[] = [];
+): ParallelSummary[] {
+  return parallels
+    .map((card) => ({
+      card,
+      headlineFmv:
+        card.market?.fair_market_value ?? fmvByUuid.get(card.uuid) ?? null,
+      ownedCount: countOwnedCopies(ownedIndex.get(card.uuid) ?? []),
+    }))
+    .sort((a, b) => {
+      const aPrice = a.headlineFmv ? Number(a.headlineFmv) : -1;
+      const bPrice = b.headlineFmv ? Number(b.headlineFmv) : -1;
+      return bPrice - aPrice;
+    });
+}
 
-  for (let index = 0; index < parallels.length; index += batchSize) {
-    const batch = parallels.slice(index, index + batchSize);
-    const batchSummaries = await Promise.all(
-      batch.map(async (card) => {
-        let headlineFmv: string | null = card.market?.fair_market_value ?? null;
-
-        if (!headlineFmv) {
-          try {
-            const market = await getCardMarket(card.uuid);
-            const raw = pickRawPoint(market.price_points);
-            headlineFmv = raw?.price_median ?? null;
-          } catch {
-            headlineFmv = null;
-          }
-        }
-
-        return {
-          card,
-          headlineFmv,
-          ownedCount: countOwnedCopies(ownedIndex.get(card.uuid) ?? []),
-        };
-      }),
-    );
-    summaries.push(...batchSummaries);
-  }
-
-  return summaries.sort((a, b) => {
-    const aPrice = a.headlineFmv ? Number(a.headlineFmv) : -1;
-    const bPrice = b.headlineFmv ? Number(b.headlineFmv) : -1;
-    return bPrice - aPrice;
-  });
+/**
+ * A card slot addressed as a filter: same set, same number.
+ *
+ * `/cards/{uuid}/parallels` hands back the whole rainbow but carries no prices, and asking for each
+ * one's market individually cost a round trip per parallel. Catalog search takes the same slot as
+ * `set_slug` + `card_number` and will price the whole page in one call, so the rainbow costs one
+ * request no matter how many finishes it has.
+ */
+function slotFilter(slot: CardOut): { set_slug: string[]; card_number: string } | null {
+  if (!slot.set_slug || !slot.card_number) return null;
+  return { set_slug: [slot.set_slug], card_number: slot.card_number };
 }
 
 export async function fetchCardDetail(
@@ -167,7 +161,8 @@ export async function fetchCardDetail(
   const start = new Date();
   start.setDate(end.getDate() - HISTORY_DAYS);
 
-  const [market, comps, parallels, priceHistory, collection] = await Promise.all([
+  // Wave one: everything addressable by this card's uuid alone, in parallel.
+  const [market, comps, parallels, priceHistory] = await Promise.all([
     getCardMarket(cardUuid),
     getCardComps(cardUuid, { grade_key: gradeKey, limit: COMP_LIMIT }),
     getCardParallels(cardUuid),
@@ -177,13 +172,41 @@ export async function fetchCardDetail(
       start: start.toISOString().slice(0, 10),
       end: end.toISOString().slice(0, 10),
     }),
-    fetchCollection({}),
   ]);
 
-  const ownedIndex = indexOwnedCopies(collection.items ?? []);
+  // Wave two needs the slot's identity, which only the rainbow knows (it includes this card, so
+  // there's always a member to read `set_slug` / `card_number` off).
+  const slot = parallels.find((card) => card.uuid === cardUuid) ?? parallels[0];
+  const filter = slot ? slotFilter(slot) : null;
+  const slotUuids = new Set(parallels.map((card) => card.uuid));
+
+  const [slotMarket, slotCopies] = await Promise.all([
+    filter
+      ? searchCards({ ...filter, include_market: true, limit: 100 })
+      : Promise.resolve(null),
+    // Copies of THIS slot, not the whole collection. Loading every copy you own to find the two
+    // that belong to this card was the single slowest thing on the page — one page of 200 costs
+    // ~3s, and a collection spans several.
+    filter
+      ? searchCollection({ set_slug: filter.set_slug, card_number: filter.card_number, limit: 200 })
+      : fetchCollection({}),
+  ]);
+
+  // Both queries address the slot by (set, number) rather than by uuid, so anything they return
+  // that isn't actually in this rainbow is dropped rather than trusted.
+  const fmvByUuid = new Map<string, string | null>(
+    (slotMarket?.items ?? [])
+      .filter((card) => slotUuids.has(card.uuid))
+      .map((card) => [card.uuid, card.market?.fair_market_value ?? null]),
+  );
+
+  const ownedIndex = indexOwnedCopies(
+    (slotCopies.items ?? []).filter((copy) => slotUuids.has(copy.card_uuid)),
+  );
   const ownedCopies = ownedIndex.get(cardUuid) ?? [];
-  const parallelSummaries = await enrichParallels(
+  const parallelSummaries = summarizeParallels(
     parallels.filter((card) => card.uuid !== cardUuid),
+    fmvByUuid,
     ownedIndex,
   );
 
