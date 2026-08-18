@@ -3,7 +3,7 @@
 Open-source tools built on top of the [slab](https://app.slab.dev-jeb.com) trading-card API.
 
 slab is a hosted API for trading-card catalog, collection, and pricing data. **This repo is not
-slab.** The API, database, seeder, and pricing pipeline are closed source and run as a hosted
+slab.** The API is closed source and runs as a hosted
 service. What lives here is the stuff people build *against* it — front ends, clients, scripts,
 integrations — released openly so nobody has to write the same wrapper twice.
 
