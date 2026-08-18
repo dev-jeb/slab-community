@@ -36,7 +36,7 @@ interface CollectionBrowseTabsProps {
   value: CollectionBrowseMode;
   onChange: (mode: CollectionBrowseMode) => void;
   /** Which modes this scope offers. Defaults to every one of them. */
-  modes?: CollectionBrowseMode[];
+  modes?: readonly CollectionBrowseMode[];
   /** Group counts per mode; undefined renders as loading. Omit entirely for no counts. */
   counts?: Partial<Record<CollectionBrowseMode, number | undefined>>;
   disabled?: boolean;

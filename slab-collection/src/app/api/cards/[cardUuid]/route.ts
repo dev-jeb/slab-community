@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { fetchCardDetail } from "@/lib/card-detail";
+import { fetchCardDetail, fetchCardGradeSlice } from "@/lib/card-detail";
 import { SlabApiError } from "@/lib/slab/client";
 
 function handleError(error: unknown) {
@@ -23,6 +23,12 @@ export async function GET(
 
     if (!cardUuid?.trim()) {
       return NextResponse.json({ detail: "Card UUID is required." }, { status: 400 });
+    }
+
+    // slice=grade: just the grade-dependent parts, for the page's grade selector.
+    if (request.nextUrl.searchParams.get("slice") === "grade") {
+      const slice = await fetchCardGradeSlice(cardUuid, gradeKey);
+      return NextResponse.json(slice);
     }
 
     const result = await fetchCardDetail(cardUuid, gradeKey);

@@ -16,6 +16,7 @@ const links = [
   { href: "/search", label: "Search" },
   { href: "/chase", label: "Chase Sets" },
   { href: "/sales", label: "Sales" },
+  { href: "/grading", label: "Grading" },
   { href: "/news", label: "Alerts", showBadge: true },
 ];
 
@@ -50,13 +51,10 @@ export function SiteHeader() {
   const inNav = links.some((link) => linkActive(pathname, link.href));
 
   return (
-    <header className="border-b border-slate-800/80 bg-[#0b1120]/95 backdrop-blur">
+    <header className="border-b border-[#2a3a5c] bg-[#0f1729]/95 backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 md:px-6">
         <div className="flex min-w-0 items-baseline gap-3">
-          <Link
-            href="/"
-            className="shrink-0 text-sm font-semibold uppercase tracking-[0.2em] text-sky-400 transition hover:text-sky-300"
-          >
+          <Link href="/" className="heading-brand shrink-0 transition hover:brightness-110">
             Slab
           </Link>
           <h1
@@ -68,7 +66,7 @@ export function SiteHeader() {
           </h1>
         </div>
 
-        <nav className="hidden items-center gap-1 md:flex">
+        <nav className="hidden items-center gap-5 md:flex">
           {links.map((link) => {
             const active = linkActive(pathname, link.href);
             const badge = link.showBadge && alertCount > 0 ? alertCount : 0;
@@ -78,17 +76,17 @@ export function SiteHeader() {
                 key={link.href}
                 href={link.href}
                 aria-current={active ? "page" : undefined}
-                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition ${
+                className={`inline-flex items-center gap-1.5 border-b-2 px-1 pb-0.5 text-sm transition ${
                   active
-                    ? "bg-sky-500/15 text-sky-100 ring-1 ring-sky-400/40"
-                    : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
+                    ? "border-[#f0b429] text-[#f0b429]"
+                    : "border-transparent text-[#7a8baa] hover:text-[#f0b429]"
                 }`}
               >
                 {link.label}
                 {badge > 0 ? (
                   // Inline, not absolutely positioned: on the last nav item an offset badge hung
                   // past the container and clipped at the window edge.
-                  <span className="rounded-full bg-sky-500 px-1.5 py-px text-[10px] font-semibold text-white">
+                  <span className="rounded-full bg-[#f0b429] px-1.5 py-px text-[10px] font-semibold text-[#0f1729]">
                     {badge > 9 ? "9+" : badge}
                   </span>
                 ) : null}

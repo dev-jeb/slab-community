@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 
 import { SetupPrompt } from "@/components/collection/SetupPrompt";
@@ -11,6 +12,7 @@ import {
 } from "@/components/search/SearchToolbar";
 import { SetsCatalogTable } from "@/components/sets/SetsCatalogTable";
 import { setSearchText } from "@/lib/set-label";
+import { readUrlParam, writeUrlParams } from "@/lib/url-state";
 import {
   sortCatalogSets,
   type SetLookupSort,
@@ -30,9 +32,28 @@ const SORT_OPTIONS: { value: SetLookupSort; label: string }[] = [
 ];
 
 export function SetLookupView() {
+  // Query and sort seed from the URL and are written back below — same contract as the two card
+  // scopes, so a filtered product list survives refresh and can be pasted to someone else.
+  const searchParams = useSearchParams();
   const [sets, setSets] = useState<SetOut[]>([]);
-  const [query, setQuery] = useState("");
-  const [setSort, setSetSort] = useState<SetLookupSort>("year_desc");
+  const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
+  const [setSort, setSetSort] = useState<SetLookupSort>(
+    () =>
+      readUrlParam(searchParams, "sort", [
+        "year_desc",
+        "year_asc",
+        "cards_desc",
+        "priced_desc",
+        "pct_priced_desc",
+      ] as const) ?? "year_desc",
+  );
+
+  useEffect(() => {
+    writeUrlParams({
+      q: query || null,
+      sort: setSort === "year_desc" ? null : setSort,
+    });
+  }, [query, setSort]);
   const [error, setError] = useState<string | null>(null);
   const [needsSetup, setNeedsSetup] = useState(false);
   const [isPending, startTransition] = useTransition();

@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 
 import { CardListRow } from "@/components/collection/CardListRow";
@@ -18,7 +19,9 @@ import {
   ViewToggleGroup,
 } from "@/components/search/SearchToolbar";
 import { formatApiDetail } from "@/lib/api-errors";
+import { useIsMobile } from "@/lib/use-is-mobile";
 import { rowFromCopy } from "@/lib/card-row";
+import { readUrlParam, writeUrlParams } from "@/lib/url-state";
 import {
   ownedCountByCardUuid,
   type CollectionBrowseMode,
@@ -60,42 +63,39 @@ import type { DashboardStats } from "@/lib/slab/types";
 
 type ViewMode = "grid" | "list";
 
-function useIsMobile(): boolean {
-  const [mobile, setMobile] = useState(false);
-
-  useEffect(() => {
-    const media = window.matchMedia("(max-width: 767px)");
-    const update = () => setMobile(media.matches);
-    update();
-    media.addEventListener("change", update);
-    return () => media.removeEventListener("change", update);
-  }, []);
-
-  return mobile;
-}
-
-interface CollectionViewProps {
-  /** Opening browse mode — an Overview pill arrives here asking for its own view. */
-  initialBrowse?: CollectionBrowseMode;
-  /** Opening filter, same idea: "Autos 22" on the Overview opens search already narrowed. */
-  initialFilter?: CollectionFilter;
-}
-
-export function CollectionView({
-  initialBrowse,
-  initialFilter,
-}: CollectionViewProps = {}) {
-  const [query, setQuery] = useState("");
-  const [submittedQuery, setSubmittedQuery] = useState("");
-  const [sort, setSort] = useState<CollectionSortOption>("value_desc");
-  const [view, setView] = useState<ViewMode>("grid");
-  // Two independent axes: what you're looking at, and what's been narrowed out of it. Both seed
-  // from the URL once, then belong to this component — the controls below are the way to change
-  // them, and rewriting the URL on every pill press would fill the history with view states.
-  const [browse, setBrowse] = useState<CollectionBrowseMode>(
-    initialBrowse ?? "cards",
+export function CollectionView() {
+  // Every input that shapes WHICH cards show seeds from the URL and is written back to it below,
+  // so a search survives refresh, Back from a card, and being pasted to someone else.
+  const searchParams = useSearchParams();
+  const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
+  const [submittedQuery, setSubmittedQuery] = useState(query);
+  const [sort, setSort] = useState<CollectionSortOption>(
+    () =>
+      readUrlParam(searchParams, "sort", [
+        "value_desc",
+        "confidence_desc",
+        "card_number_asc",
+        "card_number_desc",
+        "alpha_asc",
+      ] as const) ?? "value_desc",
   );
-  const [filter, setFilter] = useState<CollectionFilter>(initialFilter ?? "all");
+  const [view, setView] = useState<ViewMode>("grid");
+  // Two independent axes: what you're looking at, and what's been narrowed out of it.
+  const [browse, setBrowse] = useState<CollectionBrowseMode>(
+    () =>
+      readUrlParam(searchParams, "browse", [
+        "cards",
+        "sets",
+        "teams",
+        "duplicates",
+        "parallels",
+      ] as const) ?? "cards",
+  );
+  const [filter, setFilter] = useState<CollectionFilter>(
+    () =>
+      readUrlParam(searchParams, "filter", ["auto", "rookie", "numbered"] as const) ??
+      "all",
+  );
   const [result, setResult] = useState<CollectionResult | null>(null);
   const [groups, setGroups] = useState<GroupResult<unknown> | null>(null);
   const [groupSort, setGroupSort] = useState<GroupSortOption>("-value");
@@ -235,6 +235,15 @@ export function CollectionView({
       }
     });
   }, []);
+
+  useEffect(() => {
+    writeUrlParams({
+      q: submittedQuery || null,
+      sort: sort === "value_desc" ? null : sort,
+      browse: browse === "cards" ? null : browse,
+      filter: filter === "all" ? null : filter,
+    });
+  }, [submittedQuery, sort, browse, filter]);
 
   useEffect(() => {
     loadCollection();

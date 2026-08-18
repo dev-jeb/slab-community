@@ -30,6 +30,7 @@ const primaryTabs = [
 
 const moreLinks = [
   { href: "/sales", label: "Sales" },
+  { href: "/grading", label: "Grading" },
   { href: "/players", label: "Player pricing" },
   { href: "/news", label: "Alerts", showBadge: true },
 ];
@@ -81,7 +82,7 @@ export function MobileBottomNav() {
         </div>
       ) : null}
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-800 bg-[#0b1120]/95 backdrop-blur md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-[#2a3a5c] bg-[#0f1729]/95 backdrop-blur md:hidden">
         <div className="mx-auto grid max-w-7xl grid-cols-4 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2">
           {primaryTabs.map((tab) => {
             const active = tab.match(pathname);

@@ -55,7 +55,7 @@ export function PortfolioChart({ points }: PortfolioChartProps) {
         ) : null}
       </div>
       <svg viewBox={`0 0 ${width} ${height}`} className="h-56 w-full">
-        <path d={valuePath} fill="none" stroke="#38bdf8" strokeWidth="2.5" />
+        <path d={valuePath} fill="none" stroke="#60a5fa" strokeWidth="2.5" />
         {costPath ? (
           <path d={costPath} fill="none" stroke="#64748b" strokeWidth="2" strokeDasharray="6 4" />
         ) : null}

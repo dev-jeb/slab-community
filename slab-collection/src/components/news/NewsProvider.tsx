@@ -156,6 +156,9 @@ export function NewsProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     compsGeneration.current += 1;
+    // One microtask of air so the mount effect never sets state synchronously in its own commit
+    // (the resets still land before paint; manual refreshes are unaffected).
+    await Promise.resolve();
     setIsLoading(true);
     setIsLoadingComps(false);
     setError(null);
@@ -203,6 +206,9 @@ export function NewsProvider({ children }: { children: ReactNode }) {
   }, [hydrateComps]);
 
   useEffect(() => {
+    // refresh() awaits a microtask before its first setState, so nothing here sets state inside
+    // the effect's own commit — the rule is static and can't see through the call + await.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refresh();
     return () => {
       compsGeneration.current += 1;

@@ -153,6 +153,41 @@ function slotFilter(slot: CardOut): { set_slug: string[]; card_number: string } 
   return { set_slug: [slot.set_slug], card_number: slot.card_number };
 }
 
+export interface CardGradeSlice {
+  gradeKey: string;
+  comps: CardComps;
+  priceHistory: CardPriceHistory;
+}
+
+/**
+ * Only what actually changes when the grade selector changes: that grade's comps and its price
+ * history. Everything else on the card page — market, rainbow, your copies — is grade-independent,
+ * so refetching the whole detail per grade press paid five queries to answer a two-query question
+ * (and rebuilt the "Raw pricing" panel from the SELECTED grade's comps, quietly mixing a RAW
+ * median with PSA-9 ranges).
+ */
+export async function fetchCardGradeSlice(
+  cardUuid: string,
+  gradeKey: string,
+): Promise<CardGradeSlice> {
+  const end = new Date();
+  const start = new Date();
+  start.setDate(end.getDate() - HISTORY_DAYS);
+
+  const [comps, priceHistory] = await Promise.all([
+    getCardComps(cardUuid, { grade_key: gradeKey, limit: COMP_LIMIT }),
+    getCardPriceHistory(cardUuid, {
+      grade_key: gradeKey,
+      interval: "daily",
+      start: start.toISOString().slice(0, 10),
+      end: end.toISOString().slice(0, 10),
+    }),
+  ]);
+
+  return { gradeKey, comps, priceHistory };
+}
+
+
 export async function fetchCardDetail(
   cardUuid: string,
   gradeKey = "RAW",

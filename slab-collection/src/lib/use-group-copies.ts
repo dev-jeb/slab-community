@@ -24,7 +24,6 @@ export function useGroupCopies(
   params: Record<string, string> | null,
 ) {
   const [cache, setCache] = useState<Record<string, CardCopyOut[]>>({});
-  const [loading, setLoading] = useState(false);
 
   const key = params ? new URLSearchParams(params).toString() : null;
 
@@ -32,19 +31,17 @@ export function useGroupCopies(
     if (!key || cache[key]) return;
 
     let cancelled = false;
-    setLoading(true);
 
     fetch(`/api/collection?all=true&${key}`)
       .then((response) => (response.ok ? response.json() : null))
       .then((data: CollectionResult | null) => {
-        if (cancelled || !data) return;
-        setCache((current) => ({ ...current, [key]: data.items ?? [] }));
+        if (cancelled) return;
+        // A failed load caches [] — the group renders empty (as before) instead of a skeleton
+        // that would otherwise spin forever now that loading is derived from the cache.
+        setCache((current) => ({ ...current, [key]: data?.items ?? [] }));
       })
       .catch(() => {
-        // An expanded group that fails to load shows as empty; the list itself is unaffected.
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setCache((current) => ({ ...current, [key]: [] }));
       });
 
     return () => {
@@ -55,8 +52,10 @@ export function useGroupCopies(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
+  // Loading is not tracked, it's derived: an expanded key with no cache entry IS the in-flight
+  // state. The tracked flag was a second copy of that fact, set synchronously inside the effect.
   return {
     copies: key ? cache[key] : undefined,
-    loading: loading && Boolean(key) && !(key && cache[key]),
+    loading: Boolean(key) && !cache[key!],
   };
 }

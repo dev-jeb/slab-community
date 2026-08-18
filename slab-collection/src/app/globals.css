@@ -1,8 +1,19 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0b1120;
+  /* The slab portal's retro-card palette, verbatim, so the two surfaces read as one product.
+     Navy surfaces, foil-gold accent, blue-gray text tiers. */
+  --background: #0f1729;
   --foreground: #e2e8f0;
+  --surface-raised: #162040;
+  --border: #2a3a5c;
+  --border-bright: #3d5a8a;
+  --foil: #f0b429;
+  --foil-dim: #b8860b;
+  --text-dim: #7a8baa;
+  --text-muted: #7989a8;
+  --success: #34d399;
+  --danger: #f87171;
 }
 
 @theme inline {
@@ -10,12 +21,80 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-press-start), monospace;
 }
 
 body {
-  background: var(--background);
+  background-color: var(--background);
+  /* The portal's dot grid — quiet texture that says "same product" at a glance. */
+  background-image: radial-gradient(circle, #1a2744 1px, transparent 1px);
+  background-size: 24px 24px;
   color: var(--foreground);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+/* --- Portal-aligned primitives ------------------------------------------------ */
+
+/* Pixel wordmark + section headings (Press Start 2P), straight from the portal. */
+.heading-brand {
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  letter-spacing: 0.125em;
+  color: var(--foil);
+  text-transform: uppercase;
+}
+.heading-section {
+  font-family: var(--font-display);
+  font-size: 0.625rem;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+
+/* Raised card surface. Rounded like the portal's .card — only stat tiles go sharp. */
+.panel {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+}
+
+/* The portal's light pixel stat tile: sharp corners, thin border, a small foil corner
+   tick — no heavy chrome, so a row of six stays clean. */
+.stat-tile {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--surface-raised);
+  padding: 0.9rem 0.75rem;
+  transition: border-color 0.15s;
+}
+.stat-tile::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: 0.7rem;
+  height: 2px;
+  background: var(--foil-dim);
+  transition: background 0.15s;
+}
+.stat-tile:hover { border-color: var(--border-bright); }
+.stat-tile:hover::before { background: var(--foil); }
+.stat-tile__value {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-weight: 700;
+  font-size: 1.35rem;
+  line-height: 1.1;
+  color: var(--foil);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+.stat-tile__label {
+  margin-bottom: 0.3rem;
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
 }
 
 code {

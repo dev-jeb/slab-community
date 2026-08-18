@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 /**
  * The one control band every search scope wears.
@@ -42,6 +42,20 @@ export function SearchToolbar({
   tabs,
   filters,
 }: SearchToolbarProps) {
+  // Type-to-search: a pause is a submit. The button stays — it's the visible affordance and the
+  // "right now" path — but nobody should have to reach for it. Submitting is idempotent in every
+  // scope (it sets the same submitted query it would set again), so the timer firing after a
+  // button press or on mount is a no-op, not a second search.
+  const submitRef = useRef(onSubmit);
+  useEffect(() => {
+    submitRef.current = onSubmit;
+  }, [onSubmit]);
+
+  useEffect(() => {
+    const id = setTimeout(() => submitRef.current(), 400);
+    return () => clearTimeout(id);
+  }, [query]);
+
   return (
     <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:gap-6">
       <form

@@ -321,6 +321,9 @@ export interface CompOut {
   sale_type?: string | null;
   title: string;
   match_status: string;
+  /** "RAW" only means the title named no grade. True = this sale priced like the card's GRADED
+   *  copies, so treat the grade as unconfirmed — don't read its price as raw value. */
+  grade_unconfirmed?: boolean;
 }
 
 export interface CardComps {
@@ -332,6 +335,68 @@ export interface CardComps {
   finish?: string | null;
   total: number;
   comps: CompOut[];
+}
+
+/**
+ * Grading Desk — "should I slab this?" (GET /cards/{uuid}/grading-desk).
+ *
+ * The API computes a BAR, never a probability: `ten_confidence_needed` is how sure you'd need to
+ * be that YOUR copy comes back a gem before grading beats keeping it raw. Render the meaning of
+ * every metric from the response's `glossary` (the `grading.*` entries) rather than writing
+ * captions here — one source of truth, same words as the CLI and the API docs.
+ */
+export type GradingVerdict = "easy_yes" | "judgment_call" | "easy_no" | "not_enough_data";
+
+export interface MetricInfo {
+  label: string;
+  summary: string;
+  detail: string;
+}
+
+export interface GradeLanePayoff {
+  grade_key: string;
+  fair_market_value: string;
+  /** fmv − raw − fee; null when the card has no raw price. */
+  payoff?: string | null;
+  sample_size: number;
+  low_confidence?: boolean;
+  as_of_date?: string | null;
+}
+
+export interface GradingDesk {
+  card_uuid: string;
+  card_number?: string | null;
+  subjects: string[];
+  set_name?: string | null;
+  subset?: string | null;
+  finish?: string | null;
+  raw?: FmvSummary | null;
+  grading_company: string;
+  fee: string;
+  fee_source: "default" | "override";
+  lanes: GradeLanePayoff[];
+  ten_confidence_needed?: number | null;
+  ten_confidence_needed_bad_day?: number | null;
+  miss_grade?: string | null;
+  bad_day_grade?: string | null;
+  verdict: GradingVerdict;
+  thin_data?: boolean;
+  glossary: Record<string, MetricInfo>;
+}
+
+export interface GradingDeskEntry {
+  copy_uuid: string;
+  quantity: number;
+  desk: GradingDesk;
+}
+
+export interface CollectionGradingDesk {
+  collector_uuid: string;
+  total_raw_copies: number;
+  deskable: number;
+  entries: GradingDeskEntry[];
+  fee_note: string;
+  glossary: Record<string, MetricInfo>;
 }
 
 export interface CollectorOut {
@@ -351,7 +416,10 @@ export interface SlabError {
 }
 
 export interface HighlightCard {
+  /** The COPY's uuid — this row is a physical copy you own, not the catalog card. */
   uuid: string;
+  /** The catalog card behind the copy — what /cards/{uuid} takes. Absent from older API builds. */
+  card_uuid?: string | null;
   card_number: string;
   subjects: string[];
   set_name?: string | null;

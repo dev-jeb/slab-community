@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 
 import { CardListRow } from "@/components/collection/CardListRow";
@@ -17,7 +18,9 @@ import {
   ViewToggleGroup,
 } from "@/components/search/SearchToolbar";
 import { formatApiDetail } from "@/lib/api-errors";
+import { useIsMobile } from "@/lib/use-is-mobile";
 import { rowFromCard } from "@/lib/card-row";
+import { readUrlParam, writeUrlParams } from "@/lib/url-state";
 import type {
   CollectionBrowseMode,
   CollectionFilter,
@@ -58,7 +61,7 @@ const SORT_OPTIONS: { value: CatalogSort; label: string }[] = [
   { value: "subject", label: "Last name (A–Z)" },
 ];
 
-const CATALOG_MODES: CollectionBrowseMode[] = ["cards", "sets", "teams"];
+const CATALOG_MODES = ["cards", "sets", "teams"] as const satisfies readonly CollectionBrowseMode[];
 
 function filterParams(filter: CollectionFilter): Partial<CardSearchQuery> {
   switch (filter) {
@@ -73,34 +76,58 @@ function filterParams(filter: CollectionFilter): Partial<CardSearchQuery> {
   }
 }
 
-function useIsMobile(): boolean {
-  const [mobile, setMobile] = useState(false);
-
-  useEffect(() => {
-    const media = window.matchMedia("(max-width: 767px)");
-    const update = () => setMobile(media.matches);
-    update();
-    media.addEventListener("change", update);
-    return () => media.removeEventListener("change", update);
-  }, []);
-
-  return mobile;
-}
-
 export function CatalogSearchView() {
-  const [query, setQuery] = useState("");
-  const [submittedQuery, setSubmittedQuery] = useState("");
-  const [browse, setBrowse] = useState<CollectionBrowseMode>("cards");
-  const [filter, setFilter] = useState<CollectionFilter>("all");
-  const [ownership, setOwnership] = useState<OwnershipFilter>("any");
-  const [sort, setSort] = useState<CatalogSort>("-year");
+  // Every input that shapes WHICH cards show seeds from the URL and is written back below, so a
+  // search survives refresh, Back from a card, and being pasted to someone else.
+  const searchParams = useSearchParams();
+  const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
+  const [submittedQuery, setSubmittedQuery] = useState(query);
+  const [browse, setBrowse] = useState<CollectionBrowseMode>(
+    () => readUrlParam(searchParams, "browse", CATALOG_MODES) ?? "cards",
+  );
+  const [filter, setFilter] = useState<CollectionFilter>(
+    () =>
+      readUrlParam(searchParams, "filter", ["auto", "rookie", "numbered"] as const) ??
+      "all",
+  );
+  const [ownership, setOwnership] = useState<OwnershipFilter>(
+    () => readUrlParam(searchParams, "owned", ["owned", "missing"] as const) ?? "any",
+  );
+  const [sort, setSort] = useState<CatalogSort>(
+    () =>
+      readUrlParam(searchParams, "sort", [
+        "-year",
+        "year",
+        "card_number",
+        "subject",
+        "set",
+      ] as const) ?? "-year",
+  );
   const [view, setView] = useState<ViewMode>("list");
   // Drill-downs from the Sets and Teams tabs. A set is filtered by slug, which the facet doesn't
   // carry, so the name comes along to label the chip and the slug is resolved when it's picked.
   const [pickedSet, setPickedSet] = useState<{ slug: string; name: string } | null>(
-    null,
+    () => {
+      const slug = searchParams.get("set");
+      return slug ? { slug, name: searchParams.get("setname") ?? slug } : null;
+    },
   );
-  const [pickedTeam, setPickedTeam] = useState<string | null>(null);
+  const [pickedTeam, setPickedTeam] = useState<string | null>(
+    () => searchParams.get("team"),
+  );
+
+  useEffect(() => {
+    writeUrlParams({
+      q: submittedQuery || null,
+      browse: browse === "cards" ? null : browse,
+      filter: filter === "all" ? null : filter,
+      owned: ownership === "any" ? null : ownership,
+      sort: sort === "-year" ? null : sort,
+      set: pickedSet?.slug ?? null,
+      setname: pickedSet ? pickedSet.name : null,
+      team: pickedTeam,
+    });
+  }, [submittedQuery, browse, filter, ownership, sort, pickedSet, pickedTeam]);
   const [result, setResult] = useState<CardSearchResult | null>(null);
   const [facets, setFacets] = useState<FacetCount[] | null>(null);
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
@@ -116,6 +143,7 @@ export function CatalogSearchView() {
       q: submittedQuery.trim() || undefined,
       ...filterParams(filter),
       ...(ownership === "owned" ? { owned: true } : {}),
+      ...(ownership === "missing" ? { owned: false } : {}),
       ...(pickedSet ? { set_slug: [pickedSet.slug] } : {}),
       ...(pickedTeam ? { team: [pickedTeam] } : {}),
     }),

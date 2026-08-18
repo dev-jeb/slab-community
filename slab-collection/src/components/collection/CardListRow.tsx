@@ -51,7 +51,7 @@ export function CardListRow({
     return (
       <Link
         href={`/cards/${row.cardUuid}`}
-        className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/50 p-3 transition hover:border-sky-500/40 hover:bg-slate-900/70"
+        className="group flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/50 p-3 transition hover:border-sky-500/40 hover:bg-slate-900/70"
       >
         <PlayerAvatar name={playerName} size="sm" />
         <div className="min-w-0 flex-1">
@@ -79,7 +79,9 @@ export function CardListRow({
                 {row.printingCount ?? 1} printing
                 {(row.printingCount ?? 1) === 1 ? "" : "s"}
               </p>
-              <p className="mt-1 text-xs text-sky-400">Prices →</p>
+              <span className="mt-1 inline-flex items-center rounded-lg border border-sky-500/40 bg-sky-500/10 px-2.5 py-1 text-xs font-medium text-sky-200 transition group-hover:bg-sky-500/25">
+                Prices →
+              </span>
             </>
           )}
         </div>
@@ -90,7 +92,7 @@ export function CardListRow({
   return (
     <Link
       href={`/cards/${row.cardUuid}`}
-      className="grid gap-3 rounded-xl border border-slate-800 bg-slate-900/50 p-4 transition hover:border-sky-500/40 hover:bg-slate-900/70 lg:grid-cols-[auto_minmax(0,2fr)_repeat(5,minmax(0,1fr))] lg:items-center"
+      className="group grid gap-3 rounded-xl border border-slate-800 bg-slate-900/50 p-4 transition hover:border-sky-500/40 hover:bg-slate-900/70 lg:grid-cols-[auto_minmax(0,2fr)_repeat(5,minmax(0,1fr))] lg:items-center"
     >
       <PlayerAvatar name={playerName} size="sm" />
 
@@ -192,7 +194,13 @@ export function CardListRow({
             </p>
           </div>
 
-          <div className="text-sm text-sky-400">Prices &amp; sales →</div>
+          {/* Styled as the button it acts as. The row is one link, so this is a shape, not a
+              nested anchor — but it has to read as "press me", not as a stray caption. */}
+          <div>
+            <span className="inline-flex items-center rounded-lg border border-sky-500/40 bg-sky-500/10 px-3 py-1.5 text-sm font-medium text-sky-200 transition group-hover:border-sky-400/60 group-hover:bg-sky-500/25">
+              Prices &amp; sales →
+            </span>
+          </div>
         </>
       )}
     </Link>

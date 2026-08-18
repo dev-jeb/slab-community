@@ -9,6 +9,8 @@ import type {
   CardPriceHistory,
   CardSearchQuery,
   CardSearchResult,
+  CollectionGradingDesk,
+  GradingDesk,
   CollectionResult,
   CollectionSearchQuery,
   CommunityBoard,
@@ -265,6 +267,42 @@ export async function getCardComps(
 
   const suffix = params.toString() ? `?${params.toString()}` : "";
   return slabFetch<CardComps>(`/cards/${cardUuid}/comps${suffix}`);
+}
+
+export interface GradingDeskQuery {
+  /** Your grading fee per card, USD — the API's default is an approximate walk-in rate. */
+  fee?: number;
+  company?: string;
+}
+
+function gradingParams(query: GradingDeskQuery): string {
+  const params = new URLSearchParams();
+  if (query.fee !== undefined) params.set("fee", String(query.fee));
+  if (query.company) params.set("company", query.company);
+  const s = params.toString();
+  return s ? `?${s}` : "";
+}
+
+export async function getGradingDesk(
+  cardUuid: string,
+  query: GradingDeskQuery = {},
+): Promise<GradingDesk> {
+  return slabFetch<GradingDesk>(
+    `/cards/${cardUuid}/grading-desk${gradingParams(query)}`,
+  );
+}
+
+export async function getCollectionGradingDesk(
+  query: GradingDeskQuery & { limit?: number } = {},
+): Promise<CollectionGradingDesk> {
+  const collectorUuid = await getCollectorUuid();
+  const params = new URLSearchParams();
+  if (query.fee !== undefined) params.set("fee", String(query.fee));
+  if (query.company) params.set("company", query.company);
+  params.set("limit", String(query.limit ?? 100));
+  return slabFetch<CollectionGradingDesk>(
+    `/collectors/${collectorUuid}/collection/grading-desk?${params.toString()}`,
+  );
 }
 
 export async function getCardParallels(cardUuid: string): Promise<CardOut[]> {

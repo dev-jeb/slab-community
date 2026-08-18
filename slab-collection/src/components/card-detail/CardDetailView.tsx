@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState, useTransition } from "react";
 
 import { CardPriceChart, formatPriceHistoryRange } from "@/components/card-detail/CardPriceChart";
+import { GradingDeskPanel } from "@/components/card-detail/GradingDeskPanel";
 import { CopySaleActions } from "@/components/sales/CopySaleActions";
 import { OwnedCopyRow } from "@/components/collection/OwnedCopyRow";
 import { SetupPrompt } from "@/components/collection/SetupPrompt";
@@ -15,7 +16,7 @@ import {
   formatCurrency,
   formatSignedCurrency,
 } from "@/lib/slab/format";
-import type { CardDetailResult } from "@/lib/card-detail";
+import type { CardDetailResult, CardGradeSlice } from "@/lib/card-detail";
 
 function formatRange(low?: string | null, high?: string | null): string {
   if (!low && !high) return "—";
@@ -40,17 +41,21 @@ function OwnedBadge({ count }: { count: number }) {
 export function CardDetailView({ cardUuid }: CardDetailViewProps) {
   const [detail, setDetail] = useState<CardDetailResult | null>(null);
   const [gradeKey, setGradeKey] = useState("RAW");
+  // The grade selector swaps only what depends on the grade — that grade's comps and history —
+  // fetched as a slice. The full detail (market, rainbow, copies, raw summary) loads once per
+  // card and stays put, so switching grades doesn't blank the whole page. A slice for the wrong
+  // grade is ignored rather than cleared, which is what makes switching back to RAW instant.
+  const [slice, setSlice] = useState<CardGradeSlice | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [needsSetup, setNeedsSetup] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [isSlicePending, startSliceTransition] = useTransition();
 
   const loadDetail = useCallback(() => {
     startTransition(async () => {
       setError(null);
 
-      const response = await fetch(
-        `/api/cards/${cardUuid}?grade_key=${encodeURIComponent(gradeKey)}`,
-      );
+      const response = await fetch(`/api/cards/${cardUuid}`);
 
       if (response.status === 503) {
         setNeedsSetup(true);
@@ -67,11 +72,29 @@ export function CardDetailView({ cardUuid }: CardDetailViewProps) {
       setDetail(data);
       setNeedsSetup(false);
     });
-  }, [cardUuid, gradeKey]);
+  }, [cardUuid]);
 
   useEffect(() => {
     loadDetail();
   }, [loadDetail]);
+
+  useEffect(() => {
+    if (gradeKey === "RAW") return;
+
+    startSliceTransition(async () => {
+      const response = await fetch(
+        `/api/cards/${cardUuid}?slice=grade&grade_key=${encodeURIComponent(gradeKey)}`,
+      );
+      if (!response.ok) return;
+      setSlice((await response.json()) as CardGradeSlice);
+    });
+  }, [cardUuid, gradeKey]);
+
+  // RAW comes from the full detail; other grades from their slice once it lands.
+  const activeSlice = gradeKey !== "RAW" && slice?.gradeKey === gradeKey ? slice : null;
+  const comps = activeSlice?.comps ?? detail?.comps;
+  const priceHistory = activeSlice?.priceHistory ?? detail?.priceHistory;
+  const sliceLoading = gradeKey !== "RAW" && !activeSlice && isSlicePending;
 
   if (needsSetup) return <SetupPrompt />;
 
@@ -147,6 +170,16 @@ export function CardDetailView({ cardUuid }: CardDetailViewProps) {
         </div>
       ) : null}
 
+      {detail && detail.parallels.length > 0 ? (
+        <RainbowStrip
+          currentFinish={market?.finish ?? null}
+          currentFmv={detail.raw?.median ?? null}
+          currentOwned={ownedCount}
+          parallels={detail.parallels}
+        />
+      ) : null}
+
+
       {detail?.ownedCopies.length ? (
         <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
           <h3 className="text-lg font-semibold text-white">Your copies</h3>
@@ -188,8 +221,8 @@ export function CardDetailView({ cardUuid }: CardDetailViewProps) {
               <h3 className="text-lg font-semibold text-white">Price history</h3>
               <p className="mt-1 text-sm text-slate-400">
                 {formatPriceHistoryRange(
-                  detail.priceHistory.start_date,
-                  detail.priceHistory.end_date,
+                  priceHistory?.start_date,
+                  priceHistory?.end_date,
                 ) ?? "Last 90 days"}
               </p>
             </div>
@@ -212,12 +245,12 @@ export function CardDetailView({ cardUuid }: CardDetailViewProps) {
               </div>
             ) : null}
           </div>
-          <div className="mt-4">
+          <div className={`mt-4 transition-opacity ${sliceLoading ? "opacity-50" : ""}`}>
             <CardPriceChart
-              points={detail.priceHistory.points}
+              points={priceHistory?.points ?? []}
               gradeKey={gradeKey}
-              startDate={detail.priceHistory.start_date}
-              endDate={detail.priceHistory.end_date}
+              startDate={priceHistory?.start_date}
+              endDate={priceHistory?.end_date}
             />
           </div>
         </section>
@@ -264,12 +297,17 @@ export function CardDetailView({ cardUuid }: CardDetailViewProps) {
         </section>
       ) : null}
 
-      {detail?.comps.comps.length ? (
-        <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
+      <GradingDeskPanel cardUuid={cardUuid} />
+
+      {comps?.comps.length ? (
+        <section
+          className={`rounded-2xl border border-slate-800 bg-slate-900/40 p-5 transition-opacity ${
+            sliceLoading ? "opacity-50" : ""
+          }`}
+        >
           <h3 className="text-lg font-semibold text-white">Recent comps</h3>
           <p className="mt-1 text-sm text-slate-400">
-            {detail.comps.total} total · showing {detail.comps.comps.length} for{" "}
-            {gradeKey}
+            {comps.total} total · showing {comps.comps.length} for {gradeKey}
           </p>
           <div className="mt-4 overflow-x-auto rounded-xl border border-slate-800/80">
             <table className="min-w-full text-left text-sm">
@@ -283,7 +321,7 @@ export function CardDetailView({ cardUuid }: CardDetailViewProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/80">
-                {detail.comps.comps.map((comp, index) => (
+                {comps.comps.map((comp, index) => (
                   <tr key={`${comp.sold_date ?? "unknown"}-${index}`}>
                     <td className="px-3 py-2 text-slate-400">
                       {comp.sold_date ?? "—"}
@@ -293,6 +331,14 @@ export function CardDetailView({ cardUuid }: CardDetailViewProps) {
                     </td>
                     <td className="px-3 py-2 text-slate-400">
                       {comp.grade_key ?? comp.grade ?? "—"}
+                      {comp.grade_unconfirmed ? (
+                        <span
+                          className="ml-1 cursor-help text-amber-400"
+                          title="Grade unconfirmed: no grade in the listing title, but priced like this card's graded copies — likely a graded sale, so don't read it as raw value."
+                        >
+                          ?
+                        </span>
+                      ) : null}
                     </td>
                     <td className="px-3 py-2 text-slate-400">
                       {comp.marketplace}
@@ -308,35 +354,6 @@ export function CardDetailView({ cardUuid }: CardDetailViewProps) {
         </section>
       ) : null}
 
-      {detail?.parallels.length ? (
-        <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
-          <h3 className="text-lg font-semibold text-white">Parallels</h3>
-          <p className="mt-1 text-sm text-slate-400">
-            {detail.parallels.length} related variant
-            {detail.parallels.length === 1 ? "" : "s"}
-          </p>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            {detail.parallels.map(({ card, headlineFmv, ownedCount: parallelOwned }) => (
-              <Link
-                key={card.uuid}
-                href={`/cards/${card.uuid}`}
-                className="relative rounded-xl border border-slate-800/80 bg-slate-950/30 p-4 transition hover:border-sky-500/40 hover:bg-slate-950/50"
-              >
-                {parallelOwned > 0 ? (
-                  <span className="absolute right-3 top-3">
-                    <OwnedBadge count={parallelOwned} />
-                  </span>
-                ) : null}
-                <p className="pr-20 font-medium text-white">{cardTitle(card)}</p>
-                <p className="mt-1 text-sm text-slate-400">{cardSubtitle(card)}</p>
-                <p className="mt-3 text-lg font-semibold text-sky-300">
-                  {formatCurrency(headlineFmv)}
-                </p>
-              </Link>
-            ))}
-          </div>
-        </section>
-      ) : null}
     </div>
   );
 }
@@ -347,5 +364,109 @@ function Stat({ label, value }: { label: string; value: string }) {
       <p className="text-[11px] uppercase tracking-wide text-slate-500">{label}</p>
       <p className="mt-1 text-sm font-medium text-white">{value}</p>
     </div>
+  );
+}
+
+/**
+ * The whole rainbow on one quiet rail, the printing you're on included and highlighted.
+ *
+ * A rainbow can run 16 printings deep, so the strip has to stay calm at that size: one
+ * horizontally-scrolling row of identical cells rather than three wrapped rows of ragged chips.
+ * Every cell is the same width, the same two lines (name, then run · price in one muted tone),
+ * and ownership is a small emerald dot instead of a badge — so sixteen variants read as one row
+ * of options, not sixteen competing labels. Click a cell and this same page re-anchors on that
+ * printing.
+ */
+function RainbowCell({
+  name,
+  printRun,
+  fmv,
+  owned,
+  active = false,
+}: {
+  name: string;
+  printRun?: number | null;
+  fmv: string | null;
+  owned: number;
+  active?: boolean;
+}) {
+  const meta = [printRun ? `/${printRun}` : null, fmv ? formatCurrency(fmv) : null]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <span
+      className={`flex w-36 shrink-0 flex-col rounded-lg px-3 py-2 transition ${
+        active
+          ? "bg-slate-800/80 ring-1 ring-sky-400/40"
+          : "bg-slate-900/40 group-hover:bg-slate-800/60"
+      }`}
+    >
+      <span className="flex items-center gap-1.5">
+        <span
+          className={`truncate text-sm font-medium ${active ? "text-white" : "text-slate-200"}`}
+        >
+          {name}
+        </span>
+        {owned > 0 ? (
+          <span
+            className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400"
+            title={`You own ${owned}`}
+          />
+        ) : null}
+      </span>
+      <span className="mt-0.5 truncate text-xs text-slate-500">{meta || "—"}</span>
+    </span>
+  );
+}
+
+function RainbowStrip({
+  currentFinish,
+  currentFmv,
+  currentOwned,
+  parallels,
+}: {
+  currentFinish: string | null;
+  currentFmv: string | null;
+  currentOwned: number;
+  parallels: CardDetailResult["parallels"];
+}) {
+  return (
+    <section>
+      <div className="flex items-baseline justify-between">
+        <h3 className="text-xs font-medium uppercase tracking-wider text-slate-500">
+          Printings
+        </h3>
+        <span className="text-xs text-slate-600">
+          {parallels.length + 1} total
+        </span>
+      </div>
+      <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <span aria-current="true" title={currentFinish ?? "Base"}>
+          <RainbowCell
+            name={currentFinish ?? "Base"}
+            fmv={currentFmv}
+            owned={currentOwned}
+            active
+          />
+        </span>
+
+        {parallels.map(({ card, headlineFmv, ownedCount }) => (
+          <Link
+            key={card.uuid}
+            href={`/cards/${card.uuid}`}
+            className="group"
+            title={card.finish ?? "Base"}
+          >
+            <RainbowCell
+              name={card.finish ?? "Base"}
+              printRun={card.print_run}
+              fmv={headlineFmv}
+              owned={ownedCount}
+            />
+          </Link>
+        ))}
+      </div>
+    </section>
   );
 }

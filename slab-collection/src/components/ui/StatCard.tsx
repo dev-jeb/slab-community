@@ -39,7 +39,7 @@ interface StatCardProps {
   value: string;
   /** Secondary line — a derived figure or a qualifier, never a second headline. */
   hint?: string;
-  /** Tailwind text colour for the value; pair with `gainTone` for signed money. */
+  /** Overrides the tile's foil value colour — pair with `gainTone` for signed money. */
   tone?: string;
   /** Sheens and shows a placeholder instead of the value. */
   loading?: boolean;
@@ -53,16 +53,9 @@ export function StatCard({
   loading = false,
 }: StatCardProps) {
   return (
-    <div
-      aria-busy={loading}
-      className={`rounded-xl border border-slate-800 bg-slate-900/50 px-3.5 py-2.5 ${sheenClass(
-        loading,
-      )}`}
-    >
+    <div aria-busy={loading} className={`stat-tile ${sheenClass(loading)}`}>
       <SheenContent>
-        <span className="block text-[11px] uppercase tracking-wider text-slate-500">
-          {label}
-        </span>
+        <span className="stat-tile__label block">{label}</span>
         {loading ? (
           <>
             <span className="sr-only">Loading {label.toLowerCase()}</span>
@@ -72,12 +65,16 @@ export function StatCard({
             </span>
           </>
         ) : (
-          <span className={`mt-0.5 block text-xl font-semibold ${tone}`}>
+          <span
+            className={`stat-tile__value block ${
+              tone === "text-white" ? "" : tone
+            }`}
+          >
             {value}
           </span>
         )}
         {hint ? (
-          <span className="mt-0.5 block text-xs text-slate-500">{hint}</span>
+          <span className="mt-1 block text-xs text-slate-500">{hint}</span>
         ) : null}
       </SheenContent>
     </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { OwnedCopyRow } from "@/components/collection/OwnedCopyRow";
 import { PlayerAvatar, primarySubjectName } from "@/components/collection/PlayerAvatar";
@@ -71,10 +71,14 @@ export function CollectionDuplicateGroups({
   const [expandedUuid, setExpandedUuid] = useState<string | null>(null);
 
   // A new ordering puts different rows in the same positions, so a stale expansion would open
-  // something the user didn't click.
-  useEffect(() => {
+  // something the user didn't click. Reset DURING render (the React-sanctioned pattern for
+  // state-from-props), not in an effect — the effect version rendered the stale expansion first
+  // and then re-rendered closed.
+  const [prevGroups, setPrevGroups] = useState(groups);
+  if (prevGroups !== groups) {
+    setPrevGroups(groups);
     setExpandedUuid(null);
-  }, [groups]);
+  }
 
   if (groups.length === 0) {
     return (

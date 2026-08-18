@@ -8,10 +8,6 @@ import { CatalogSearchView } from "@/components/search/CatalogSearchView";
 import { SetLookupView } from "@/components/sets/SetLookupView";
 import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
 import { Sheen, SheenBar } from "@/components/ui/sheen";
-import type {
-  CollectionBrowseMode,
-  CollectionFilter,
-} from "@/lib/collection-filters";
 
 /**
  * One search, three things to point it at.
@@ -35,18 +31,6 @@ function scopeFrom(value: string | null): SearchScope {
   return value === "catalog" || value === "sets" ? value : "collection";
 }
 
-function browseFrom(value: string | null): CollectionBrowseMode | undefined {
-  return value === "sets" || value === "teams" || value === "duplicates"
-    ? value
-    : undefined;
-}
-
-function filterFrom(value: string | null): CollectionFilter | undefined {
-  return value === "auto" || value === "rookie" || value === "numbered"
-    ? value
-    : undefined;
-}
-
 function SearchContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -55,10 +39,11 @@ function SearchContent() {
   const setScope = useCallback(
     (next: SearchScope) => {
       const params = new URLSearchParams(searchParams.toString());
-      // browse/filter seed the collection scope only (they arrive from an overview pill). Carrying
-      // them across a scope change would silently narrow a search you just widened.
-      params.delete("browse");
-      params.delete("filter");
+      // Each scope mirrors its own state into these keys (see url-state). "McDavid" typed against
+      // your collection is not a question about products, so nothing carries across a switch.
+      for (const key of ["q", "browse", "filter", "owned", "sort", "set", "setname", "team"]) {
+        params.delete(key);
+      }
 
       if (next === "collection") {
         params.delete("scope");
@@ -88,10 +73,7 @@ function SearchContent() {
       </div>
 
       {scope === "collection" ? (
-        <CollectionView
-          initialBrowse={browseFrom(searchParams.get("browse"))}
-          initialFilter={filterFrom(searchParams.get("filter"))}
-        />
+        <CollectionView />
       ) : scope === "catalog" ? (
         <CatalogSearchView />
       ) : (

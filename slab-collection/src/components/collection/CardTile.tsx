@@ -170,7 +170,9 @@ export function CardTile({
               ? `${row.printingCount} printings`
               : "No parallels"}
           </span>
-          <span className="text-sky-400">Prices & sales →</span>
+          <span className="inline-flex items-center rounded-lg border border-sky-500/40 bg-sky-500/10 px-2.5 py-1 font-medium text-sky-200 transition group-hover:bg-sky-500/25">
+            Prices &amp; sales →
+          </span>
         </div>
       )}
     </Link>

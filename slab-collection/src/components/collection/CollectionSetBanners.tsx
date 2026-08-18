@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { CardListRow } from "@/components/collection/CardListRow";
 import { rowFromCopy } from "@/lib/card-row";
@@ -94,10 +94,14 @@ export function CollectionSetBanners({
   const copies = preloaded ?? fetched;
 
   // A new ordering puts different rows in the same positions, so a stale expansion would open
-  // something the user didn't click.
-  useEffect(() => {
+  // something the user didn't click. Reset DURING render (the React-sanctioned pattern for
+  // state-from-props), not in an effect — the effect version rendered the stale expansion first
+  // and then re-rendered closed.
+  const [prevGroups, setPrevGroups] = useState(groups);
+  if (prevGroups !== groups) {
+    setPrevGroups(groups);
     setExpandedSet(null);
-  }, [groups]);
+  }
 
   if (groups.length === 0) {
     return (

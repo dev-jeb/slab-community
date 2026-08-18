@@ -42,12 +42,18 @@ export function PlayerAvatar({
   );
   const [failed, setFailed] = useState(false);
 
-  useEffect(() => {
+  // Name changes reset synchronously DURING render (the state-from-props pattern), so a recycled
+  // avatar never paints the previous player's photo for a frame. The effect below then only has
+  // the async part left: resolving a url the cache doesn't have yet.
+  const [prevName, setPrevName] = useState(name);
+  if (prevName !== name) {
+    setPrevName(name);
     setFailed(false);
-    const cached = getCachedPlayerImageUrl(name);
-    setImageUrl(cached);
+    setImageUrl(getCachedPlayerImageUrl(name));
+  }
 
-    if (cached !== undefined) return;
+  useEffect(() => {
+    if (imageUrl !== undefined) return;
 
     let cancelled = false;
 
@@ -58,7 +64,7 @@ export function PlayerAvatar({
     return () => {
       cancelled = true;
     };
-  }, [name]);
+  }, [name, imageUrl]);
 
   useEffect(() => {
     return subscribePlayerImage((updatedName) => {

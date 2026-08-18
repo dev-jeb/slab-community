@@ -147,9 +147,13 @@ export function CollectionTeamGroups({
     });
   }
 
-  useEffect(() => {
+  // Same reset-during-render pattern as the other grouped views: a sort change reorders the
+  // tiles, so a held expansion would open something the user didn't click.
+  const [prevSort, setPrevSort] = useState(sort);
+  if (prevSort !== sort) {
+    setPrevSort(sort);
     setExpandedTeam(null);
-  }, [sort]);
+  }
 
   useEffect(() => {
     if (!expandedTeam) return;

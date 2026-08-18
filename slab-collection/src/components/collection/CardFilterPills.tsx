@@ -34,8 +34,12 @@ const FILTERS: { id: CollectionFilter; label: string }[] = [
   { id: "numbered", label: "Numbered" },
 ];
 
+// Both lenses are SLOT-level on collapsed rows (the API resolves them across the whole rainbow):
+// Owned = you have some printing of the card, Missing = you have none. That's what makes Missing
+// honest here — a per-printing "missing" would match nearly every card with parallels.
 const OWNERSHIP: { id: Exclude<OwnershipFilter, "any">; label: string }[] = [
   { id: "owned", label: "Owned" },
+  { id: "missing", label: "Missing" },
 ];
 
 export function CardFilterPills({
