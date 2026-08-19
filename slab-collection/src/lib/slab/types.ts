@@ -338,14 +338,20 @@ export interface CardComps {
 }
 
 /**
- * Grading Desk — "should I slab this?" (GET /cards/{uuid}/grading-desk).
+ * Grading Desk — the grading math for a raw card (GET /cards/{uuid}/grading-desk).
  *
- * The API computes a BAR, never a probability: `ten_confidence_needed` is how sure you'd need to
- * be that YOUR copy comes back a gem before grading beats keeping it raw. Render the meaning of
- * every metric from the response's `glossary` (the `grading.*` entries) rather than writing
- * captions here — one source of truth, same words as the CLI and the API docs.
+ * The API computes a BAR, never a probability, and describes, never prescribes:
+ * `ten_confidence_needed` is how likely a gem would have to be for grading and staying raw to pay
+ * the same, and `break_even` names which side of that line the observed prices land on — data for
+ * the holder's decision, not a recommendation. Render the meaning of every metric from the
+ * response's `glossary` (the `grading.*` entries) rather than writing captions here — one source
+ * of truth, same words as the CLI and the API docs.
  */
-export type GradingVerdict = "easy_yes" | "judgment_call" | "easy_no" | "not_enough_data";
+export type BreakEvenRegion =
+  | "pays_at_any_grade"
+  | "depends_on_grade"
+  | "pays_at_no_grade"
+  | "not_enough_data";
 
 export interface MetricInfo {
   label: string;
@@ -379,7 +385,7 @@ export interface GradingDesk {
   ten_confidence_needed_bad_day?: number | null;
   miss_grade?: string | null;
   bad_day_grade?: string | null;
-  verdict: GradingVerdict;
+  break_even: BreakEvenRegion;
   thin_data?: boolean;
   glossary: Record<string, MetricInfo>;
 }

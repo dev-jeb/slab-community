@@ -3,14 +3,16 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 
 import { formatCurrency, formatSignedCurrency } from "@/lib/slab/format";
-import type { GradingDesk, GradingVerdict, MetricInfo } from "@/lib/slab/types";
+import type { BreakEvenRegion, GradingDesk, MetricInfo } from "@/lib/slab/types";
 
 /**
- * "Should I grade it?" — the per-card grading desk (GET /cards/{uuid}/grading-desk).
+ * The grading math — the per-card grading desk (GET /cards/{uuid}/grading-desk).
  *
- * Two contracts from the API carry through here untouched:
- *  - The desk computes a BAR, not a probability: the verdict sentence frames the number as how
- *    good YOUR copy has to look, never "how often it happens".
+ * Three contracts from the API carry through here untouched:
+ *  - The desk computes a BAR, not a probability: the reading frames the number as where
+ *    break-even sits for YOUR copy, never "how often it happens".
+ *  - The desk describes, never prescribes: every sentence states what the prices show; whether
+ *    to grade stays the user's call (grading is subjective and they're holding the card).
  *  - Metric meaning renders from the response's embedded `grading.*` glossary (tooltips + the
  *    section explainer), so this panel, the CLI, and the API docs always say the same words.
  */
@@ -52,7 +54,7 @@ export function GradingDeskPanel({ cardUuid }: { cardUuid: string }) {
     // A desk that can't load shouldn't break the card page — say so quietly and move on.
     return (
       <section>
-        <h3 className="text-lg font-semibold text-white">Should I grade it?</h3>
+        <h3 className="text-lg font-semibold text-white">The grading math</h3>
         <p className="mt-2 text-sm text-slate-400">Couldn&apos;t load the grading desk: {error}</p>
       </section>
     );
@@ -60,7 +62,7 @@ export function GradingDeskPanel({ cardUuid }: { cardUuid: string }) {
   if (!desk) {
     return (
       <section>
-        <h3 className="text-lg font-semibold text-white">Should I grade it?</h3>
+        <h3 className="text-lg font-semibold text-white">The grading math</h3>
         <p className="mt-2 text-sm text-slate-500">Reading the graded market…</p>
       </section>
     );
@@ -72,10 +74,10 @@ export function GradingDeskPanel({ cardUuid }: { cardUuid: string }) {
     <section className={`transition-opacity ${loading ? "opacity-50" : ""}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-lg font-semibold text-white">Should I grade it?</h3>
+          <h3 className="text-lg font-semibold text-white">The grading math</h3>
           <p className="mt-1 max-w-xl text-sm text-slate-400" title={g("ten_confidence_needed")?.detail}>
             {g("ten_confidence_needed")?.summary ??
-              "How sure you'd need to be this card gems before grading beats keeping it raw."}
+              "How likely a gem would have to be for grading and keeping it raw to pay the same."}
           </p>
         </div>
         <label className="flex items-center gap-2 text-sm text-slate-400" title={g("fee")?.detail}>
@@ -96,7 +98,7 @@ export function GradingDeskPanel({ cardUuid }: { cardUuid: string }) {
         </label>
       </div>
 
-      <VerdictBanner desk={desk} verdictInfo={g("verdict")} />
+      <BreakEvenBanner desk={desk} breakEvenInfo={g("break_even")} />
 
       {desk.lanes.length > 0 ? (
         <div className="mt-4 overflow-x-auto rounded-xl border border-slate-800/80">
@@ -146,7 +148,7 @@ export function GradingDeskPanel({ cardUuid }: { cardUuid: string }) {
       </p>
       {desk.thin_data ? (
         <p className="mt-1 text-xs text-amber-400/90">
-          Thin data — part of this verdict rests on 1–2 sales. Treat it as a hint, not a market
+          Thin data — part of this reading rests on 1–2 sales. Treat it as a hint, not a market
           reading.
         </p>
       ) : null}
@@ -159,21 +161,22 @@ function payoffTone(payoff?: string | null): string {
   return Number(payoff) >= 0 ? "text-emerald-300" : "text-rose-300";
 }
 
-const VERDICT_STYLE: Record<GradingVerdict, string> = {
-  easy_yes: "border-emerald-500/30 bg-emerald-500/10 text-emerald-200",
-  judgment_call: "border-sky-400/30 bg-sky-400/10 text-sky-200",
-  easy_no: "border-rose-500/30 bg-rose-500/10 text-rose-200",
+const BREAK_EVEN_STYLE: Record<BreakEvenRegion, string> = {
+  pays_at_any_grade: "border-emerald-500/30 bg-emerald-500/10 text-emerald-200",
+  depends_on_grade: "border-sky-400/30 bg-sky-400/10 text-sky-200",
+  pays_at_no_grade: "border-rose-500/30 bg-rose-500/10 text-rose-200",
   not_enough_data: "border-slate-700 bg-slate-800/40 text-slate-300",
 };
 
-/** The verdict as one plain sentence — same confidence-bar framing as the CLI, built from the
- *  desk's own fields so the wording tracks the data, with glossary detail on hover. */
-function VerdictBanner({
+/** Where the math lands, as one plain DATA sentence — same framing as the CLI, built from the
+ *  desk's own fields so the wording tracks the data, with glossary detail on hover. Never an
+ *  instruction: the reader is holding the card, and the send/keep decision is theirs. */
+function BreakEvenBanner({
   desk,
-  verdictInfo,
+  breakEvenInfo,
 }: {
   desk: GradingDesk;
-  verdictInfo?: MetricInfo;
+  breakEvenInfo?: MetricInfo;
 }) {
   const payoffOf = (gradeKey?: string | null) =>
     desk.lanes.find((lane) => lane.grade_key === gradeKey)?.payoff ?? null;
@@ -182,25 +185,25 @@ function VerdictBanner({
   let headline: string;
   let sub: string | null = null;
 
-  if (desk.verdict === "not_enough_data") {
+  if (desk.break_even === "not_enough_data") {
     headline = "No graded market to read yet";
     sub = "Nobody has sold graded copies of this card recently. Not a no — an honest shrug.";
-  } else if (desk.verdict === "easy_no") {
-    headline = "Keep it raw";
+  } else if (desk.break_even === "pays_at_no_grade") {
+    headline = "No grade covers the fee";
     sub = gem?.payoff != null
-      ? `Even a ${gem.grade_key} only returns ${formatSignedCurrency(gem.payoff)} after the ${formatCurrency(desk.fee)} fee.`
-      : `No grade covers the ${formatCurrency(desk.fee)} fee.`;
-  } else if (desk.verdict === "easy_yes") {
+      ? `At today's prices even a ${gem.grade_key} returns ${formatSignedCurrency(gem.payoff)} after the ${formatCurrency(desk.fee)} fee.`
+      : `At today's prices no grade covers the ${formatCurrency(desk.fee)} fee.`;
+  } else if (desk.break_even === "pays_at_any_grade") {
     const missPayoff = payoffOf(desk.miss_grade);
-    headline = "Send it";
+    headline = "Every grade pays";
     sub = missPayoff != null
-      ? `Even a ${desk.miss_grade} nets ${formatSignedCurrency(missPayoff)} after the fee.`
-      : "Even a realistic miss beats staying raw.";
+      ? `At today's prices even a ${desk.miss_grade} nets ${formatSignedCurrency(missPayoff)} after the fee.`
+      : "At today's prices even a realistic miss nets more than staying raw.";
   } else {
     const pct = desk.ten_confidence_needed != null
       ? `${Math.round(desk.ten_confidence_needed * 100)}%`
       : "—";
-    headline = `Your call — grade it if you're more than ${pct} sure it gems`;
+    headline = `Depends on the grade — break-even sits at ${pct}`;
     const gemText = gem?.payoff != null
       ? `a ${gem.grade_key} nets ${formatSignedCurrency(gem.payoff)}`
       : null;
@@ -210,20 +213,26 @@ function VerdictBanner({
       : missPayoff != null
         ? `a ${desk.miss_grade} comes back ${formatSignedCurrency(missPayoff)}`
         : null;
-    sub = [gemText, missText].filter(Boolean).join("; ") || null;
+    const outcomes = [gemText, missText].filter(Boolean).join("; ");
+    sub = [
+      outcomes || null,
+      `Below a ${pct} chance of a gem, grading loses; above it, grading wins. You can see the card — that read is yours.`,
+    ]
+      .filter(Boolean)
+      .join(". ");
   }
 
   const badDay =
-    (desk.verdict === "easy_yes" || desk.verdict === "judgment_call") &&
+    (desk.break_even === "pays_at_any_grade" || desk.break_even === "depends_on_grade") &&
     desk.ten_confidence_needed_bad_day != null &&
     desk.bad_day_grade
-      ? `Cautious read: if misses come back ${desk.bad_day_grade} instead, the bar is ${Math.round(desk.ten_confidence_needed_bad_day * 100)}%.`
+      ? `Cautious read: if misses come back ${desk.bad_day_grade} instead, break-even moves to ${Math.round(desk.ten_confidence_needed_bad_day * 100)}%.`
       : null;
 
   return (
     <div
-      className={`mt-4 rounded-xl border px-4 py-3 ${VERDICT_STYLE[desk.verdict]}`}
-      title={verdictInfo?.detail}
+      className={`mt-4 rounded-xl border px-4 py-3 ${BREAK_EVEN_STYLE[desk.break_even]}`}
+      title={breakEvenInfo?.detail}
     >
       <p className="font-semibold">{headline}</p>
       {sub ? <p className="mt-1 text-sm opacity-90">{sub}</p> : null}
