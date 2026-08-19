@@ -5,6 +5,29 @@ interface PortfolioChartProps {
   points: PortfolioPoint[];
 }
 
+function parseChartDate(value: string): number {
+  return Date.parse(value.includes("T") ? value : `${value}T12:00:00`);
+}
+
+function formatChartDate(value: string): string {
+  const time = parseChartDate(value);
+  if (Number.isNaN(time)) return value;
+  return new Date(time).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function dateTickIndexes(length: number, count = 6): number[] {
+  if (length <= count) return Array.from({ length }, (_, index) => index);
+  const last = length - 1;
+  const ticks = new Set<number>();
+  for (let index = 0; index < count; index += 1) {
+    ticks.add(Math.round((index / (count - 1)) * last));
+  }
+  return [...ticks].sort((a, b) => a - b);
+}
+
 export function PortfolioChart({ points }: PortfolioChartProps) {
   if (points.length < 2) {
     return (
@@ -24,12 +47,24 @@ export function PortfolioChart({ points }: PortfolioChartProps) {
   const width = 800;
   const height = 220;
   const pad = 24;
+  const padBottom = 36;
+  const times = points.map((point) => parseChartDate(point.date));
+  const rangeStart = Math.min(...times);
+  const rangeEnd = Math.max(...times);
+  const dateSpan = rangeEnd - rangeStart;
+
+  function toX(index: number): number {
+    if (dateSpan <= 0 || Number.isNaN(times[index])) {
+      return pad + (index / (points.length - 1)) * (width - pad * 2);
+    }
+    return pad + ((times[index] - rangeStart) / dateSpan) * (width - pad * 2);
+  }
 
   function toPath(nums: number[]) {
     return nums
       .map((value, index) => {
-        const x = pad + (index / (nums.length - 1)) * (width - pad * 2);
-        const y = height - pad - ((value - min) / range) * (height - pad * 2);
+        const x = toX(index);
+        const y = height - padBottom - ((value - min) / range) * (height - pad - padBottom);
         return `${index === 0 ? "M" : "L"}${x},${y}`;
       })
       .join(" ");
@@ -39,6 +74,7 @@ export function PortfolioChart({ points }: PortfolioChartProps) {
   const costPath = costs.every((value) => value !== null)
     ? toPath(costs as number[])
     : null;
+  const ticks = dateTickIndexes(points.length);
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
@@ -59,11 +95,27 @@ export function PortfolioChart({ points }: PortfolioChartProps) {
         {costPath ? (
           <path d={costPath} fill="none" stroke="#64748b" strokeWidth="2" strokeDasharray="6 4" />
         ) : null}
+        {ticks.map((pointIndex, index) => {
+          const point = points[pointIndex];
+          const x = toX(pointIndex);
+          const anchor =
+            index === 0 ? "start" : index === ticks.length - 1 ? "end" : "middle";
+          return (
+            <text
+              key={`${point.date}-${pointIndex}`}
+              x={x}
+              y={height - 8}
+              textAnchor={anchor}
+              fill="#64748b"
+              fontSize="11"
+            >
+              {formatChartDate(point.date)}
+            </text>
+          );
+        })}
       </svg>
-      <div className="mt-2 flex justify-between text-xs text-slate-500">
-        <span>{points[0]?.date}</span>
-        <span>{formatCurrency(String(values.at(-1)))} today</span>
-        <span>{points.at(-1)?.date}</span>
+      <div className="mt-1 text-right text-xs text-slate-500">
+        {formatCurrency(String(values.at(-1)))} today
       </div>
     </div>
   );

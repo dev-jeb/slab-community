@@ -32,3 +32,11 @@ export function readUrlParam<T extends string>(
     ? (value as T)
     : null;
 }
+
+/** Search → My Collection → Sets, with this set's dropdown open. */
+export function collectionSetSearchHref(slug: string): string {
+  const params = new URLSearchParams();
+  params.set("browse", "sets");
+  params.set("set", slug);
+  return `/search?${params.toString()}`;
+}

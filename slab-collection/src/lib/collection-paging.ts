@@ -78,6 +78,8 @@ export interface CollectionRequest {
   sort: CollectionSortOption;
   /** Row to start at, or null to fetch the whole collection. */
   offset: number | null;
+  /** Narrow to one catalog set (the grouped-view expand and dashboard set links). */
+  setSlug?: string | null;
 }
 
 /**
@@ -91,6 +93,7 @@ export function collectionParams({
   filter,
   sort,
   offset,
+  setSlug,
 }: CollectionRequest): URLSearchParams {
   const params = new URLSearchParams();
 
@@ -107,6 +110,8 @@ export function collectionParams({
     params.set(key, value);
   }
 
+  if (setSlug?.trim()) params.set("set_slug", setSlug.trim());
+
   return params;
 }
 
@@ -119,13 +124,20 @@ export function collectionFetchKey(
   sort: CollectionSortOption,
   search = "",
   browse: CollectionBrowseMode = "cards",
+  setSlug = "",
 ): string {
+  const setKey = setSlug.trim() ? `|set:${setSlug.trim()}` : "";
   return usesServerPaging(browse, sort, search)
-    ? `paged|${serverSortKey(sort)}|${filter}`
-    : `all|${filter}`;
+    ? `paged|${serverSortKey(sort)}|${filter}${setKey}`
+    : `all|${filter}${setKey}`;
 }
 
 /** Filter params for a grouped request — the same narrowing, applied before the roll-up. */
-export function groupFilterParams(filter: CollectionFilter): Record<string, string> {
-  return categoryQueryParams(filter);
+export function groupFilterParams(
+  filter: CollectionFilter,
+  setSlug?: string | null,
+): Record<string, unknown> {
+  const params: Record<string, unknown> = { ...categoryQueryParams(filter) };
+  if (setSlug?.trim()) params.set_slug = [setSlug.trim()];
+  return params;
 }

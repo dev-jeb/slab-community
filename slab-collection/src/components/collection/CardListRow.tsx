@@ -13,6 +13,8 @@ import {
 } from "@/lib/slab/format";
 import { PriceConfidenceBadge } from "@/components/collection/PriceConfidenceBadge";
 import { PlayerAvatar, primarySubjectName } from "@/components/collection/PlayerAvatar";
+import { SetAccentBar } from "@/components/collection/SetAccentBar";
+import { setAccentKey } from "@/lib/set-accent";
 
 interface CardListRowProps {
   row: CardRow;
@@ -39,6 +41,7 @@ export function CardListRow({
   const checklist = setChecklistNumber(card);
   const ownedSerial = copy ? ownedSerialLabel(copy) : null;
   const owned = row.ownedCount ?? 0;
+  const accentKey = setAccentKey(card);
 
   const ownedBadge =
     owned > 1 || (!copy && owned > 0) ? (
@@ -51,8 +54,9 @@ export function CardListRow({
     return (
       <Link
         href={`/cards/${row.cardUuid}`}
-        className="group flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/50 p-3 transition hover:border-sky-500/40 hover:bg-slate-900/70"
+        className="group relative flex items-center gap-3 overflow-hidden rounded-xl border border-slate-800 bg-slate-900/50 p-3 transition hover:border-sky-500/40 hover:bg-slate-900/70"
       >
+        <SetAccentBar accentKey={accentKey} />
         <PlayerAvatar name={playerName} size="sm" />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -92,8 +96,9 @@ export function CardListRow({
   return (
     <Link
       href={`/cards/${row.cardUuid}`}
-      className="group grid gap-3 rounded-xl border border-slate-800 bg-slate-900/50 p-4 transition hover:border-sky-500/40 hover:bg-slate-900/70 lg:grid-cols-[auto_minmax(0,2fr)_repeat(5,minmax(0,1fr))] lg:items-center"
+      className="group relative grid gap-3 overflow-hidden rounded-xl border border-slate-800 bg-slate-900/50 p-4 transition hover:border-sky-500/40 hover:bg-slate-900/70 lg:grid-cols-[auto_minmax(0,2fr)_repeat(5,minmax(0,1fr))] lg:items-center"
     >
+      <SetAccentBar accentKey={accentKey} />
       <PlayerAvatar name={playerName} size="sm" />
 
       <div>

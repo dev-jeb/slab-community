@@ -6,10 +6,8 @@ import {
   groupByParallelFamily,
   parallelGroupsOnly,
 } from "@/lib/collection-filters";
-import {
-  TEAM_PLAYERS_SORT,
-  type GroupSortOption,
-} from "@/lib/collection-paging";
+import { TEAM_PLAYERS_SORT, type GroupSortOption } from "@/lib/collection-paging";
+import { sortCollectionCopies } from "@/lib/collection-sort";
 import { compareLastName, primarySubjectName } from "@/lib/names";
 import type {
   CardCopyOut,
@@ -121,6 +119,26 @@ function compareGroupSort(
 
   const names = a.name.localeCompare(b.name);
   return sort === "-name" ? -names : names;
+}
+
+/**
+ * Order a group's copies the same way the grouped Sort control orders the groups themselves.
+ *
+ * Highest value / Name apply directly. "Most cards" (and "Most players") don't distinguish
+ * copies inside one group, so those fall through to checklist number — the order you want
+ * when you're looking at a set's contents.
+ */
+export function sortCopiesForGroupView(
+  copies: CardCopyOut[],
+  sort: GroupSortOption,
+): CardCopyOut[] {
+  if (sort === "-value" || sort === "value") {
+    return sortCollectionCopies(copies, "value_desc");
+  }
+  if (sort === "name" || sort === "-name") {
+    return sortCollectionCopies(copies, "alpha_asc");
+  }
+  return sortCollectionCopies(copies, "card_number_asc");
 }
 
 export function setGroupsFromCopies(

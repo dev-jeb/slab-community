@@ -8,6 +8,7 @@ import { Sheen, SheenBar } from "@/components/ui/sheen";
 import { useGroupCopies } from "@/lib/use-group-copies";
 import { TeamLogo } from "@/components/collection/TeamLogo";
 import { TEAM_PLAYERS_SORT, type GroupSortOption } from "@/lib/collection-paging";
+import { sortCopiesForGroupView } from "@/lib/collection-search";
 import type { TeamGroupOut } from "@/lib/slab/types";
 
 /**
@@ -147,14 +148,6 @@ export function CollectionTeamGroups({
     });
   }
 
-  // Same reset-during-render pattern as the other grouped views: a sort change reorders the
-  // tiles, so a held expansion would open something the user didn't click.
-  const [prevSort, setPrevSort] = useState(sort);
-  if (prevSort !== sort) {
-    setPrevSort(sort);
-    setExpandedTeam(null);
-  }
-
   useEffect(() => {
     if (!expandedTeam) return;
 
@@ -253,7 +246,7 @@ export function CollectionTeamGroups({
                     ))}
                   </Sheen>
                 ) : (
-                  (copies ?? []).map((copy) => (
+                  sortCopiesForGroupView(copies ?? [], sort).map((copy) => (
                     <CardListRow
                       key={`${expandedGroup.name}-${copy.uuid}`}
                       row={rowFromCopy(copy)}

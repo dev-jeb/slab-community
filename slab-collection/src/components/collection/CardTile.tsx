@@ -14,6 +14,8 @@ import {
   ownedSerialLabel,
   setChecklistNumber,
 } from "@/lib/slab/format";
+import { SetAccentBar } from "@/components/collection/SetAccentBar";
+import { setAccentKey } from "@/lib/set-accent";
 
 interface CardTileProps {
   row: CardRow;
@@ -46,12 +48,14 @@ export function CardTile({
   const checklist = setChecklistNumber(card);
   const ownedSerial = copy ? ownedSerialLabel(copy) : null;
   const owned = row.ownedCount ?? 0;
+  const accentKey = setAccentKey(card);
 
   return (
     <Link
       href={`/cards/${row.cardUuid}`}
-      className="group flex flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-900/60 transition hover:border-sky-500/40 hover:bg-slate-900"
+      className="group relative flex flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-900/60 transition hover:border-sky-500/40 hover:bg-slate-900"
     >
+      <SetAccentBar accentKey={accentKey} />
       <div className="relative aspect-[3/4] bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 p-4">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.08),transparent_55%)]" />
         <div className="relative flex h-full flex-col justify-between">

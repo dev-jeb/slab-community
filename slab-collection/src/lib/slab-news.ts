@@ -13,6 +13,7 @@ export interface OwnedCardNews {
   setName?: string | null;
   subset?: string | null;
   finish?: string | null;
+  ownedCount: number;
   market: {
     fmv: string | null;
     sampleSize: number | null;
@@ -95,7 +96,14 @@ export async function buildNewsPayload(): Promise<NewsPayload> {
   const cardMap = new Map<string, OwnedCardNews>();
 
   for (const copy of copies) {
-    if (!copy.card_uuid || cardMap.has(copy.card_uuid)) continue;
+    if (!copy.card_uuid) continue;
+
+    const qty = Math.max(copy.quantity, 1);
+    const existing = cardMap.get(copy.card_uuid);
+    if (existing) {
+      existing.ownedCount += qty;
+      continue;
+    }
 
     const card = copy.card;
     cardMap.set(copy.card_uuid, {
@@ -105,6 +113,7 @@ export async function buildNewsPayload(): Promise<NewsPayload> {
       setName: card?.set_name,
       subset: card?.subset,
       finish: card?.finish,
+      ownedCount: qty,
       market: copy.market
         ? {
             fmv: copy.market.fair_market_value ?? null,

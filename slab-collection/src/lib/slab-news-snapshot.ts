@@ -37,6 +37,9 @@ export interface CompAlert {
   previousFmv: string | null;
   currentFmv: string | null;
   fmvDelta: string | null;
+  /** Per-copy FMV change; null when either side is unpriced. */
+  fmvDeltaValue: number | null;
+  ownedCount: number;
   previousSampleSize: number | null;
   currentSampleSize: number | null;
   previousLowConfidence: boolean | null;
@@ -158,14 +161,34 @@ function soldDateMs(value?: string | null): number {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
-function fmvDelta(previous: string | null, current: string | null): string | null {
+function fmvDeltaAmount(
+  previous: string | null,
+  current: string | null,
+): number | null {
   if (!previous || !current) return null;
 
   const prevNum = Number(previous);
   const currNum = Number(current);
   if (Number.isNaN(prevNum) || Number.isNaN(currNum)) return null;
 
-  return formatSignedCurrency(String(currNum - prevNum));
+  return currNum - prevNum;
+}
+
+/** Collection P&L from new comps: each card's FMV change × copies owned. Unpriced stays unknown. */
+export function compAlertsPnl(alerts: CompAlert[]): {
+  amount: number | null;
+  priced: number;
+} {
+  let sum = 0;
+  let priced = 0;
+
+  for (const alert of alerts) {
+    if (alert.fmvDeltaValue == null) continue;
+    priced += 1;
+    sum += alert.fmvDeltaValue * Math.max(alert.ownedCount, 1);
+  }
+
+  return { amount: priced > 0 ? sum : null, priced };
 }
 
 export function diffCompAlerts(
@@ -188,6 +211,7 @@ export function diffCompAlerts(
 
     const previousFmv = previous.fmv;
     const currentFmv = card.market?.fmv ?? null;
+    const deltaValue = fmvDeltaAmount(previousFmv, currentFmv);
 
     alerts.push({
       cardUuid: card.cardUuid,
@@ -201,7 +225,9 @@ export function diffCompAlerts(
       latestComp: card.comps.latest,
       previousFmv,
       currentFmv,
-      fmvDelta: fmvDelta(previousFmv, currentFmv),
+      fmvDelta: deltaValue == null ? null : formatSignedCurrency(String(deltaValue)),
+      fmvDeltaValue: deltaValue,
+      ownedCount: Math.max(card.ownedCount ?? 1, 1),
       previousSampleSize: previous.sampleSize,
       currentSampleSize: card.market?.sampleSize ?? null,
       previousLowConfidence: previous.lowConfidence,

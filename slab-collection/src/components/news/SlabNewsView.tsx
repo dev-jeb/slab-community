@@ -6,10 +6,12 @@ import { useMemo } from "react";
 import { SetupPrompt } from "@/components/collection/SetupPrompt";
 import { PriceConfidenceBadge } from "@/components/collection/PriceConfidenceBadge";
 import { useNews } from "@/components/news/NewsProvider";
+import { SheenBar, SheenContent, sheenClass } from "@/components/ui/sheen";
+import { gainTone } from "@/components/ui/StatCard";
 import { confidenceToneClass } from "@/lib/slab/confidence";
 import { setLabel } from "@/lib/set-label";
-import { cardSubtitle, cardTitle, formatCurrency } from "@/lib/slab/format";
-import type { CompAlert } from "@/lib/slab-news-snapshot";
+import { cardSubtitle, cardTitle, formatCurrency, formatSignedCurrency } from "@/lib/slab/format";
+import { compAlertsPnl, type CompAlert } from "@/lib/slab-news-snapshot";
 import type { SetOut } from "@/lib/slab/types";
 
 function formatSoldDate(value?: string | null): string {
@@ -129,7 +131,10 @@ function CompAlertRow({ alert }: { alert: CompAlert }) {
             {formatCurrency(alert.previousFmv)} → {formatCurrency(alert.currentFmv)}
           </p>
           {alert.fmvDelta ? (
-            <p className="mt-1 text-sm text-slate-400">Change {alert.fmvDelta}</p>
+            <p className={`mt-1 text-sm ${gainTone(alert.fmvDeltaValue == null ? null : String(alert.fmvDeltaValue), "text-slate-400")}`}>
+              Change {alert.fmvDelta}
+              {alert.ownedCount > 1 ? ` · ×${alert.ownedCount}` : ""}
+            </p>
           ) : null}
         </div>
       </div>
@@ -158,6 +163,7 @@ export function SlabNewsView() {
     () => (payload?.ticker ?? []).filter((item) => item.kind === "catalog"),
     [payload],
   );
+  const pnl = useMemo(() => compAlertsPnl(compAlerts), [compAlerts]);
 
   if (needsSetup) return <SetupPrompt />;
 
@@ -175,14 +181,50 @@ export function SlabNewsView() {
             </p>
           ) : null}
         </div>
-        <button
-          type="button"
-          onClick={markAllSeen}
-          disabled={!payload || isLoadingComps}
-          className="rounded-lg border border-slate-700 bg-slate-900/60 px-4 py-2 text-sm text-slate-200 transition hover:border-slate-600 hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Mark all as seen
-        </button>
+        <div className="flex flex-wrap items-center gap-4">
+          <div
+            className={`min-w-[9rem] text-right ${sheenClass(isLoadingComps)}`}
+            aria-busy={isLoadingComps}
+          >
+            <SheenContent>
+              <p className="text-[10px] uppercase tracking-wider text-slate-500">
+                Comp P&L
+              </p>
+              {isLoadingComps ? (
+                <span className="mt-1 block">
+                  <SheenBar className="ml-auto h-7 w-24" />
+                </span>
+              ) : (
+                <p
+                  className={`mt-0.5 text-2xl font-semibold tabular-nums ${gainTone(
+                    pnl.amount == null ? null : String(pnl.amount),
+                  )}`}
+                >
+                  {formatSignedCurrency(
+                    pnl.amount == null ? null : String(pnl.amount),
+                  )}
+                </p>
+              )}
+              <p className="mt-0.5 text-xs text-slate-500">
+                {isLoadingComps
+                  ? "Summing new comps…"
+                  : compAlerts.length === 0
+                    ? "No new comps"
+                    : pnl.priced < compAlerts.length
+                      ? `${compAlerts.length} new · ${pnl.priced} priced`
+                      : `${compAlerts.length} new comp${compAlerts.length === 1 ? "" : "s"}`}
+              </p>
+            </SheenContent>
+          </div>
+          <button
+            type="button"
+            onClick={markAllSeen}
+            disabled={!payload || isLoadingComps}
+            className="rounded-lg border border-slate-700 bg-slate-900/60 px-4 py-2 text-sm text-slate-200 transition hover:border-slate-600 hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Mark all as seen
+          </button>
+        </div>
       </div>
 
       {isLoading && !payload ? (

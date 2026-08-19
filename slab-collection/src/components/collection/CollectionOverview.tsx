@@ -10,8 +10,11 @@ import { gainTone, StatCard, StatGrid } from "@/components/ui/StatCard";
 import {
   formatCurrency,
   formatPercent,
+  formatPricedShare,
   formatSignedCurrency,
 } from "@/lib/slab/format";
+import { collectionSetSearchHref } from "@/lib/url-state";
+import { SetAccentBar } from "@/components/collection/SetAccentBar";
 import type { SetPortfolioSummary } from "@/lib/portfolio-sets";
 import type { DashboardStats, HighlightCard, PortfolioHistory } from "@/lib/slab/types";
 
@@ -134,22 +137,58 @@ export function CollectionOverview() {
               <h2 className="heading-section">Top sets</h2>
               <div className="mt-4 space-y-3">
                 {topSetsByValue.length ? (
-                  topSetsByValue.map((set) => (
-                    <div
-                      key={set.label}
-                      className="flex items-center justify-between gap-4 border-b border-slate-800 pb-3 last:border-0"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-white">{set.label}</p>
-                        <p className="text-sm text-slate-400">
-                          {set.count} card{set.count === 1 ? "" : "s"}
-                        </p>
-                      </div>
-                      <p className="shrink-0 font-medium text-white">
-                        {formatCurrency(String(set.value))}
-                      </p>
-                    </div>
-                  ))
+                  topSetsByValue.map((set) => {
+                    const body = (
+                      <>
+                        <div className="min-w-0">
+                          <p className="truncate text-white">{set.label}</p>
+                          <p className="text-sm text-slate-400">
+                            {set.count} card{set.count === 1 ? "" : "s"}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 items-end gap-5 text-right">
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-slate-500">
+                              Value
+                            </p>
+                            <p className="font-medium text-white">
+                              {formatCurrency(String(set.value))}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-slate-500">
+                              % Priced
+                            </p>
+                            <p className="font-medium text-white">
+                              {formatPricedShare(set.pricedShare)}
+                            </p>
+                          </div>
+                        </div>
+                      </>
+                    );
+
+                    if (!set.setSlug) {
+                      return (
+                        <div
+                          key={set.label}
+                          className="flex items-center justify-between gap-4 border-b border-[#2a3a5c] px-2 py-3 last:border-0"
+                        >
+                          {body}
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <Link
+                        key={set.label}
+                        href={collectionSetSearchHref(set.setSlug)}
+                        className="relative -mx-2 flex items-center justify-between gap-4 overflow-hidden rounded-lg border-b border-[#2a3a5c] px-2 py-3 transition last:border-0 hover:bg-[#1a2744]"
+                      >
+                        <SetAccentBar accentKey={set.setSlug} />
+                        {body}
+                      </Link>
+                    );
+                  })
                 ) : (
                   <p className="text-sm text-slate-400">No set data available.</p>
                 )}

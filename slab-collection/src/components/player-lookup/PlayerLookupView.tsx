@@ -5,6 +5,7 @@ import { useMemo, useState, useTransition } from "react";
 
 import { SetupPrompt } from "@/components/collection/SetupPrompt";
 import { PriceConfidenceBadge } from "@/components/collection/PriceConfidenceBadge";
+import { FolderTabs } from "@/components/ui/FolderTabs";
 import { confidenceScore } from "@/lib/slab/confidence";
 import { cardSubtitle, cardTitle, formatCurrency } from "@/lib/slab/format";
 import type {
@@ -16,6 +17,7 @@ import type {
 
 type CardTypeFilter = "all" | "auto" | "rookie" | "numbered";
 type SortMode = "price-desc" | "price-asc" | "confidence-desc" | "set";
+type VariantFolder = "raw" | "graded" | "comps";
 
 function variantHeadlinePrice(variant: PlayerVariant): number | null {
   const value =
@@ -167,7 +169,7 @@ function GradedPricingTable({ graded }: { graded: GradedPriceSummary[] }) {
   if (graded.length === 0) return null;
 
   return (
-    <div className="mt-4 overflow-x-auto rounded-xl border border-slate-800/80">
+    <div className="overflow-x-auto rounded-xl border border-slate-800/80">
       <table className="min-w-full text-left text-sm">
         <thead className="bg-slate-950/60 text-[11px] uppercase tracking-wide text-slate-500">
           <tr>
@@ -199,17 +201,46 @@ function GradedPricingTable({ graded }: { graded: GradedPriceSummary[] }) {
   );
 }
 
-function VariantRow({ variant }: { variant: PlayerVariant }) {
-  const [expanded, setExpanded] = useState(false);
+function VariantPick({
+  variant,
+  selected,
+  onSelect,
+}: {
+  variant: PlayerVariant;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const { card, raw } = variant;
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`flex w-full items-start justify-between gap-3 rounded-lg border px-3 py-2.5 text-left transition ${
+        selected
+          ? "border-[#c4a574]/50 bg-[#1a2744] ring-1 ring-[#c4a574]/20"
+          : "border-slate-800/80 bg-slate-950/30 hover:border-slate-700 hover:bg-slate-950/50"
+      }`}
+    >
+      <div className="min-w-0">
+        <p className="truncate text-sm font-medium text-white">{cardTitle(card)}</p>
+        <p className="mt-0.5 truncate text-xs text-slate-400">{cardSubtitle(card)}</p>
+      </div>
+      <p className="shrink-0 text-sm font-semibold text-sky-300">
+        {formatCurrency(raw?.median ?? card.market?.fair_market_value)}
+      </p>
+    </button>
+  );
+}
+
+function VariantFolder({ variant }: { variant: PlayerVariant }) {
+  const [folder, setFolder] = useState<VariantFolder>("raw");
   const { card, raw, graded } = variant;
 
   return (
-    <Link
-      href={`/cards/${card.uuid}`}
-      className="block rounded-xl border border-slate-800/80 bg-slate-950/30 p-4 transition hover:border-sky-500/40 hover:bg-slate-950/50"
-    >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3 px-1">
+        <div className="min-w-0">
           <h4 className="font-medium text-white">{cardTitle(card)}</h4>
           <p className="mt-1 text-sm text-slate-400">{cardSubtitle(card)}</p>
           {card.odds ? (
@@ -223,51 +254,48 @@ function VariantRow({ variant }: { variant: PlayerVariant }) {
           <p className="mt-1 text-lg font-semibold text-sky-300">
             {formatCurrency(raw?.median ?? card.market?.fair_market_value)}
           </p>
+          <Link
+            href={`/cards/${card.uuid}`}
+            className="mt-2 inline-block text-sm text-sky-400 hover:text-sky-300"
+          >
+            Open card →
+          </Link>
         </div>
       </div>
 
-      {raw ? (
-        <div className="mt-4 border-t border-slate-800/80 pt-4">
-          <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-500">
-            Raw pricing
-          </p>
-          <RawPricingStats raw={raw} />
-        </div>
-      ) : (
-        <p className="mt-4 border-t border-slate-800/80 pt-4 text-sm text-slate-500">
-          No raw comps yet for this variant.
-        </p>
-      )}
+      <FolderTabs
+        ariaLabel="Card pricing folders"
+        tabs={[
+          { id: "raw", label: "Raw" },
+          { id: "graded", label: "Graded" },
+          { id: "comps", label: "Sales" },
+        ]}
+        value={folder}
+        onChange={setFolder}
+      >
+        {folder === "raw" ? (
+          raw ? (
+            <RawPricingStats raw={raw} />
+          ) : (
+            <p className="text-sm text-slate-500">
+              No raw comps yet for this variant.
+            </p>
+          )
+        ) : null}
 
-      {graded.length > 0 ? (
-        <div className="mt-4 border-t border-slate-800/80 pt-4">
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">
-            Graded pricing
-          </p>
-          <GradedPricingTable graded={graded} />
-        </div>
-      ) : null}
+        {folder === "graded" ? (
+          graded.length > 0 ? (
+            <GradedPricingTable graded={graded} />
+          ) : (
+            <p className="text-sm text-slate-500">
+              No graded comps yet for this variant.
+            </p>
+          )
+        ) : null}
 
-      {raw && raw.recentComps.length > 0 ? (
-        <div className="mt-4 border-t border-slate-800/80 pt-4">
-          <button
-            type="button"
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              setExpanded((current) => !current);
-            }}
-            className="text-sm text-sky-400 transition hover:text-sky-300"
-          >
-            {expanded ? "Hide" : "Show"} recent comps ({raw.recentComps.length}
-            {raw.compTotal > raw.recentComps.length
-              ? ` of ${raw.compTotal}`
-              : ""}
-            )
-          </button>
-
-          {expanded ? (
-            <div className="mt-3 overflow-x-auto rounded-xl border border-slate-800/80">
+        {folder === "comps" ? (
+          raw && raw.recentComps.length > 0 ? (
+            <div className="overflow-x-auto rounded-xl border border-slate-800/80">
               <table className="min-w-full text-left text-sm">
                 <thead className="bg-slate-950/60 text-[11px] uppercase tracking-wide text-slate-500">
                   <tr>
@@ -296,11 +324,18 @@ function VariantRow({ variant }: { variant: PlayerVariant }) {
                   ))}
                 </tbody>
               </table>
+              {raw.compTotal > raw.recentComps.length ? (
+                <p className="px-3 py-2 text-xs text-slate-500">
+                  Showing {raw.recentComps.length} of {raw.compTotal} sales
+                </p>
+              ) : null}
             </div>
-          ) : null}
-        </div>
-      ) : null}
-    </Link>
+          ) : (
+            <p className="text-sm text-slate-500">No recent sales on file.</p>
+          )
+        ) : null}
+      </FolderTabs>
+    </div>
   );
 }
 
@@ -310,6 +345,7 @@ export function PlayerLookupView({ embedded = false }: { embedded?: boolean }) {
   const [cardType, setCardType] = useState<CardTypeFilter>("all");
   const [result, setResult] = useState<PlayerLookupResult | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("price-desc");
+  const [selectedUuid, setSelectedUuid] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [needsSetup, setNeedsSetup] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -335,6 +371,11 @@ export function PlayerLookupView({ embedded = false }: { embedded?: boolean }) {
     if (!result || sortMode !== "set") return [];
     return groupVariantsBySet(result.variants);
   }, [result, sortMode]);
+
+  const selectedVariant =
+    sortedVariants.find((variant) => variant.card.uuid === selectedUuid) ??
+    sortedVariants[0] ??
+    null;
 
   function runSearch() {
     if (!player.trim()) {
@@ -370,6 +411,7 @@ export function PlayerLookupView({ embedded = false }: { embedded?: boolean }) {
 
       const data = (await response.json()) as PlayerLookupResult;
       setResult(data);
+      setSelectedUuid(data.variants[0]?.card.uuid ?? null);
     });
   }
 
@@ -515,30 +557,44 @@ export function PlayerLookupView({ embedded = false }: { embedded?: boolean }) {
               No catalog variants found for that player
               {cardQuery.trim() ? ` matching “${cardQuery.trim()}”.` : "."}
             </p>
-          ) : sortMode === "set" ? (
-            groupedVariants.map(([setName, variants]) => (
-              <section
-                key={setName}
-                className="rounded-2xl border border-slate-800 bg-slate-900/30 p-5"
-              >
-                <div className="mb-4 flex items-center justify-between gap-3">
-                  <h4 className="text-lg font-medium text-white">{setName}</h4>
-                  <span className="text-sm text-slate-500">
-                    {variants.length} variant{variants.length === 1 ? "" : "s"}
-                  </span>
-                </div>
-                <div className="space-y-4">
-                  {variants.map((variant) => (
-                    <VariantRow key={variant.card.uuid} variant={variant} />
-                  ))}
-                </div>
-              </section>
-            ))
           ) : (
-            <div className="space-y-4">
-              {sortedVariants.map((variant) => (
-                <VariantRow key={variant.card.uuid} variant={variant} />
-              ))}
+            <div className="grid gap-6 lg:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)] lg:items-start">
+              <nav
+                aria-label="Card variants"
+                className="max-h-[70vh] space-y-2 overflow-y-auto pr-1"
+              >
+                {sortMode === "set"
+                  ? groupedVariants.map(([setName, variants]) => (
+                      <div key={setName} className="space-y-2">
+                        <p className="sticky top-0 z-[1] bg-[#0f1729]/95 px-1 py-1 text-xs font-medium uppercase tracking-wider text-slate-500">
+                          {setName}
+                        </p>
+                        {variants.map((variant) => (
+                          <VariantPick
+                            key={variant.card.uuid}
+                            variant={variant}
+                            selected={selectedVariant?.card.uuid === variant.card.uuid}
+                            onSelect={() => setSelectedUuid(variant.card.uuid)}
+                          />
+                        ))}
+                      </div>
+                    ))
+                  : sortedVariants.map((variant) => (
+                      <VariantPick
+                        key={variant.card.uuid}
+                        variant={variant}
+                        selected={selectedVariant?.card.uuid === variant.card.uuid}
+                        onSelect={() => setSelectedUuid(variant.card.uuid)}
+                      />
+                    ))}
+              </nav>
+
+              {selectedVariant ? (
+                <VariantFolder
+                  key={selectedVariant.card.uuid}
+                  variant={selectedVariant}
+                />
+              ) : null}
             </div>
           )}
         </section>

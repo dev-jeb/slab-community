@@ -24,6 +24,12 @@ export function formatPercent(value?: string | null): string {
   }).format(num);
 }
 
+/** Coverage share (0–1) without a sign — "61%" not "+61%". */
+export function formatPricedShare(share: number | null | undefined): string {
+  if (share == null || Number.isNaN(share)) return "—";
+  return `${Math.round(share * 100)}%`;
+}
+
 export function formatSignedCurrency(value?: string | null): string {
   if (!value) return "—";
   const num = Number(value);

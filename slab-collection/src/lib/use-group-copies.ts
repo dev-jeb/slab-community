@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
+import { COLLECTION_PAGE_SIZE } from "@/lib/collection-paging";
 import type { CardCopyOut, CollectionResult } from "@/lib/slab/types";
 
 /**
@@ -18,7 +19,47 @@ import type { CardCopyOut, CollectionResult } from "@/lib/slab/types";
  *
  * Results are cached per group for the life of the view, so reopening one is instant and toggling
  * doesn't re-fetch.
+ *
+ * Pages at the collection page size (48) rather than `all=true`. That path asked Slab for 200 rows
+ * even when the set had two dozen cards, and a 200-row collection search is several times slower
+ * than the same filter at 48.
  */
+async function fetchGroupCopies(filterQuery: string): Promise<CardCopyOut[]> {
+  const firstResponse = await fetch(
+    `/api/collection?limit=${COLLECTION_PAGE_SIZE}&offset=0&${filterQuery}`,
+  );
+  if (!firstResponse.ok) return [];
+
+  const first = (await firstResponse.json()) as CollectionResult;
+  const copies: CardCopyOut[] = [...(first.items ?? [])];
+  const total = first.total ?? copies.length;
+
+  if (copies.length >= total) return copies;
+
+  const offsets: number[] = [];
+  for (
+    let offset = COLLECTION_PAGE_SIZE;
+    offset < total;
+    offset += COLLECTION_PAGE_SIZE
+  ) {
+    offsets.push(offset);
+  }
+
+  const pages = await Promise.all(
+    offsets.map(async (offset) => {
+      const response = await fetch(
+        `/api/collection?limit=${COLLECTION_PAGE_SIZE}&offset=${offset}&${filterQuery}`,
+      );
+      if (!response.ok) return [] as CardCopyOut[];
+      const page = (await response.json()) as CollectionResult;
+      return page.items ?? [];
+    }),
+  );
+
+  for (const items of pages) copies.push(...items);
+  return copies;
+}
+
 export function useGroupCopies(
   /** Query params identifying the group, or null when nothing is expanded. */
   params: Record<string, string> | null,
@@ -32,13 +73,10 @@ export function useGroupCopies(
 
     let cancelled = false;
 
-    fetch(`/api/collection?all=true&${key}`)
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data: CollectionResult | null) => {
+    fetchGroupCopies(key)
+      .then((copies) => {
         if (cancelled) return;
-        // A failed load caches [] — the group renders empty (as before) instead of a skeleton
-        // that would otherwise spin forever now that loading is derived from the cache.
-        setCache((current) => ({ ...current, [key]: data?.items ?? [] }));
+        setCache((current) => ({ ...current, [key]: copies }));
       })
       .catch(() => {
         if (!cancelled) setCache((current) => ({ ...current, [key]: [] }));
@@ -57,5 +95,60 @@ export function useGroupCopies(
   return {
     copies: key ? cache[key] : undefined,
     loading: Boolean(key) && !cache[key!],
+    cache,
   };
+}
+
+const PRICED_SHARE_CONCURRENCY = 4;
+
+/**
+ * % priced for set banners, without loading every copy.
+ *
+ * The grouped set list has value and counts but no coverage. A 1-row collection search still
+ * returns `summary.priced_copies` for that set, which is enough to fill the column.
+ */
+export function useSetPricedShares(slugs: string[]): Record<string, number | null> {
+  const [shares, setShares] = useState<Record<string, number | null>>({});
+  const seen = useRef(new Set<string>());
+  const slugKey = slugs.filter(Boolean).join("|");
+
+  useEffect(() => {
+    const missing = slugKey ? slugKey.split("|").filter((slug) => !seen.current.has(slug)) : [];
+    if (!missing.length) return;
+
+    for (const slug of missing) seen.current.add(slug);
+    let cancelled = false;
+
+    void (async () => {
+      for (let i = 0; i < missing.length; i += PRICED_SHARE_CONCURRENCY) {
+        const chunk = missing.slice(i, i + PRICED_SHARE_CONCURRENCY);
+        const entries = await Promise.all(
+          chunk.map(async (slug) => {
+            try {
+              const response = await fetch(
+                `/api/collection?limit=1&offset=0&set_slug=${encodeURIComponent(slug)}`,
+              );
+              if (!response.ok) return [slug, null] as const;
+              const data = (await response.json()) as CollectionResult;
+              const priced = data.summary?.priced_copies;
+              const total = data.total ?? 0;
+              if (priced == null || total <= 0) return [slug, null] as const;
+              return [slug, priced / total] as const;
+            } catch {
+              return [slug, null] as const;
+            }
+          }),
+        );
+        if (cancelled) return;
+        setShares((current) => ({ ...current, ...Object.fromEntries(entries) }));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      for (const slug of missing) seen.current.delete(slug);
+    };
+  }, [slugKey]);
+
+  return shares;
 }

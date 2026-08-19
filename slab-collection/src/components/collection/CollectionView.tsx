@@ -91,11 +91,27 @@ export function CollectionView() {
         "parallels",
       ] as const) ?? "cards",
   );
+  // Links into this view (dashboard Top sets) change `browse` in the URL while CollectionView
+  // stays mounted. Sync during render so the first paint after the click is already Sets.
+  const [urlParamsSnapshot, setUrlParamsSnapshot] = useState(searchParams);
+  if (searchParams !== urlParamsSnapshot) {
+    setUrlParamsSnapshot(searchParams);
+    const nextBrowse =
+      readUrlParam(searchParams, "browse", [
+        "cards",
+        "sets",
+        "teams",
+        "duplicates",
+        "parallels",
+      ] as const) ?? "cards";
+    if (nextBrowse !== browse) setBrowse(nextBrowse);
+  }
   const [filter, setFilter] = useState<CollectionFilter>(
     () =>
       readUrlParam(searchParams, "filter", ["auto", "rookie", "numbered"] as const) ??
       "all",
   );
+  const expandSetSlug = (searchParams.get("set") ?? "").trim();
   const [result, setResult] = useState<CollectionResult | null>(null);
   const [groups, setGroups] = useState<GroupResult<unknown> | null>(null);
   const [groupSort, setGroupSort] = useState<GroupSortOption>("-value");
@@ -242,8 +258,10 @@ export function CollectionView() {
       sort: sort === "value_desc" ? null : sort,
       browse: browse === "cards" ? null : browse,
       filter: filter === "all" ? null : filter,
+      set: browse === "sets" ? expandSetSlug || null : null,
+      setname: null,
     });
-  }, [submittedQuery, sort, browse, filter]);
+  }, [submittedQuery, sort, browse, filter, expandSetSlug]);
 
   useEffect(() => {
     loadCollection();
@@ -301,6 +319,11 @@ export function CollectionView() {
   // True from the moment the inputs change until that request's data is on screen — including
   // the first load, when there's nothing to be stale.
   const awaitingData = loadedKey !== fetchKey;
+  const keepStaleGroups =
+    Boolean(groupKind) &&
+    !searching &&
+    groups != null &&
+    (loadedKey?.startsWith(`group|${groupKind}|`) ?? false);
 
   const loadedCount = result?.items?.length ?? 0;
   const hasMore = paged && loadedCount < (result?.total ?? 0);
@@ -399,12 +422,16 @@ export function CollectionView() {
         }
       />
 
-      {(groupKind || browse === "parallels") && awaitingData ? (
+      {(groupKind || browse === "parallels") && awaitingData && !keepStaleGroups ? (
         <GroupSkeleton />
       ) : groupKind === "teams" ? (
         <CollectionTeamGroups groups={visibleTeamGroups} sort={groupSort} />
       ) : groupKind === "sets" ? (
-        <CollectionSetBanners groups={visibleSetGroups} />
+        <CollectionSetBanners
+          groups={visibleSetGroups}
+          expandSlug={expandSetSlug}
+          sort={groupSort}
+        />
       ) : groupKind === "duplicates" ? (
         <CollectionDuplicateGroups groups={visibleDuplicateGroups} />
       ) : browse === "parallels" ? (

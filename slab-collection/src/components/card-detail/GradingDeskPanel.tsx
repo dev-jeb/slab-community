@@ -51,7 +51,7 @@ export function GradingDeskPanel({ cardUuid }: { cardUuid: string }) {
   if (error) {
     // A desk that can't load shouldn't break the card page — say so quietly and move on.
     return (
-      <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
+      <section>
         <h3 className="text-lg font-semibold text-white">Should I grade it?</h3>
         <p className="mt-2 text-sm text-slate-400">Couldn&apos;t load the grading desk: {error}</p>
       </section>
@@ -59,7 +59,7 @@ export function GradingDeskPanel({ cardUuid }: { cardUuid: string }) {
   }
   if (!desk) {
     return (
-      <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
+      <section>
         <h3 className="text-lg font-semibold text-white">Should I grade it?</h3>
         <p className="mt-2 text-sm text-slate-500">Reading the graded market…</p>
       </section>
@@ -69,7 +69,7 @@ export function GradingDeskPanel({ cardUuid }: { cardUuid: string }) {
   const g = (key: string): MetricInfo | undefined => desk.glossary?.[`grading.${key}`];
 
   return (
-    <section className={`rounded-2xl border border-slate-800 bg-slate-900/40 p-5 transition-opacity ${loading ? "opacity-50" : ""}`}>
+    <section className={`transition-opacity ${loading ? "opacity-50" : ""}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-lg font-semibold text-white">Should I grade it?</h3>

@@ -123,6 +123,18 @@ export async function getAccount(): Promise<MeOut> {
   return slabFetch<MeOut>("/account");
 }
 
+/** Slab's collection search wants `set_slug` as a list; a query-string value arrives as a string. */
+function normalizeCollectionQuery(
+  query: CollectionSearchQuery,
+): CollectionSearchQuery {
+  const slug = query.set_slug;
+  if (typeof slug === "string") {
+    const trimmed = slug.trim();
+    return { ...query, set_slug: trimmed ? [trimmed] : undefined };
+  }
+  return query;
+}
+
 export async function searchCollection(
   query: CollectionSearchQuery = {},
 ): Promise<CollectionResult> {
@@ -135,7 +147,7 @@ export async function searchCollection(
       body: JSON.stringify({
         limit: 48,
         offset: 0,
-        ...query,
+        ...normalizeCollectionQuery(query),
       }),
     },
   );
@@ -171,7 +183,7 @@ export async function listCollectionGroups<T>(
       body: JSON.stringify({
         limit: GROUP_PAGE_SIZE,
         offset: 0,
-        ...query,
+        ...normalizeCollectionQuery(query),
       }),
     },
   );
@@ -346,10 +358,12 @@ export async function getPortfolioHistory(
   const start = new Date();
   start.setDate(end.getDate() - days);
 
+  // Daily is the API's native grain. Weekly was used for windows over 60 days, which left a
+  // 90-day chart with about 13 points. Ninety daily snapshots is still a small payload.
   const params = new URLSearchParams({
     start_date: start.toISOString().slice(0, 10),
     end_date: end.toISOString().slice(0, 10),
-    interval: days > 60 ? "weekly" : "daily",
+    interval: "daily",
   });
 
   return slabFetch<PortfolioHistory>(

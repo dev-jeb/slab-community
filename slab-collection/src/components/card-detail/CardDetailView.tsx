@@ -10,6 +10,7 @@ import { OwnedCopyRow } from "@/components/collection/OwnedCopyRow";
 import { SetupPrompt } from "@/components/collection/SetupPrompt";
 import { PlayerAvatar, primarySubjectName } from "@/components/collection/PlayerAvatar";
 import { PriceConfidenceBadge } from "@/components/collection/PriceConfidenceBadge";
+import { FolderTabs } from "@/components/ui/FolderTabs";
 import {
   cardSubtitle,
   cardTitle,
@@ -27,6 +28,8 @@ function formatRange(low?: string | null, high?: string | null): string {
 interface CardDetailViewProps {
   cardUuid: string;
 }
+
+type DetailFolder = "copies" | "pricing" | "history" | "comps" | "grade";
 
 function OwnedBadge({ count }: { count: number }) {
   if (count <= 0) return null;
@@ -50,6 +53,7 @@ export function CardDetailView({ cardUuid }: CardDetailViewProps) {
   const [needsSetup, setNeedsSetup] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [isSlicePending, startSliceTransition] = useTransition();
+  const [folder, setFolder] = useState<DetailFolder>("pricing");
 
   const loadDetail = useCallback(() => {
     startTransition(async () => {
@@ -77,6 +81,11 @@ export function CardDetailView({ cardUuid }: CardDetailViewProps) {
   useEffect(() => {
     loadDetail();
   }, [loadDetail]);
+
+  useEffect(() => {
+    setFolder("pricing");
+    setGradeKey("RAW");
+  }, [cardUuid]);
 
   useEffect(() => {
     if (gradeKey === "RAW") return;
@@ -179,179 +188,202 @@ export function CardDetailView({ cardUuid }: CardDetailViewProps) {
         />
       ) : null}
 
-
-      {detail?.ownedCopies.length ? (
-        <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
-          <h3 className="text-lg font-semibold text-white">Your copies</h3>
-          <p className="mt-1 text-sm text-slate-400">
-            {detail.ownedCopies.length} in your collection
-          </p>
-          <div className="mt-4 space-y-3">
-            {detail.ownedCopies.map((copy) => (
-              <OwnedCopyRow key={copy.uuid} copy={copy}>
-                <CopySaleActions copy={copy} onUpdated={loadDetail} />
-              </OwnedCopyRow>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {detail?.raw ? (
-        <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
-          <h3 className="text-lg font-semibold text-white">Raw pricing</h3>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Stat label="FMV (median)" value={formatCurrency(detail.raw.median)} />
-            <Stat label="Comp average" value={formatCurrency(detail.raw.average)} />
-            <Stat
-              label="Purchase range"
-              value={formatRange(detail.raw.low, detail.raw.high)}
-            />
-            <Stat
-              label="Comp sales range"
-              value={formatRange(detail.raw.compMin, detail.raw.compMax)}
-            />
-          </div>
-        </section>
-      ) : null}
-
       {detail ? (
-        <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 className="text-lg font-semibold text-white">Price history</h3>
-              <p className="mt-1 text-sm text-slate-400">
-                {formatPriceHistoryRange(
-                  priceHistory?.start_date,
-                  priceHistory?.end_date,
-                ) ?? "Last 90 days"}
-              </p>
-            </div>
-            {detail.gradeKeys.length > 1 ? (
-              <div className="flex flex-wrap gap-2">
-                {detail.gradeKeys.map((key) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setGradeKey(key)}
-                    className={
-                      gradeKey === key
-                        ? "rounded-full border border-sky-400/40 bg-sky-400/10 px-3 py-1 text-sm text-sky-200"
-                        : "rounded-full border border-slate-700 px-3 py-1 text-sm text-slate-400 transition hover:border-slate-600 hover:text-slate-200"
-                    }
-                  >
-                    {key}
-                  </button>
+        <FolderTabs
+          ariaLabel="Card details"
+          tabs={[
+            { id: "copies", label: "Copies" },
+            { id: "pricing", label: "Pricing" },
+            { id: "history", label: "History" },
+            { id: "comps", label: "Sales" },
+            { id: "grade", label: "Grade it" },
+          ]}
+          value={folder}
+          onChange={setFolder}
+        >
+          {folder === "copies" ? (
+            detail.ownedCopies.length ? (
+              <div className="space-y-3">
+                <p className="text-sm text-slate-400">
+                  {detail.ownedCopies.length} in your collection
+                </p>
+                {detail.ownedCopies.map((copy) => (
+                  <OwnedCopyRow key={copy.uuid} copy={copy}>
+                    <CopySaleActions copy={copy} onUpdated={loadDetail} />
+                  </OwnedCopyRow>
                 ))}
               </div>
-            ) : null}
-          </div>
-          <div className={`mt-4 transition-opacity ${sliceLoading ? "opacity-50" : ""}`}>
-            <CardPriceChart
-              points={priceHistory?.points ?? []}
-              gradeKey={gradeKey}
-              startDate={priceHistory?.start_date}
-              endDate={priceHistory?.end_date}
-            />
-          </div>
-        </section>
-      ) : null}
+            ) : (
+              <p className="text-sm text-slate-400">
+                You don&apos;t own this printing.
+              </p>
+            )
+          ) : null}
 
-      {detail?.graded.length ? (
-        <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
-          <h3 className="text-lg font-semibold text-white">Graded pricing & uplift</h3>
-          <div className="mt-4 overflow-x-auto rounded-xl border border-slate-800/80">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-slate-950/60 text-[11px] uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-3 py-2 font-medium">Grade</th>
-                  <th className="px-3 py-2 font-medium">Comps</th>
-                  <th className="px-3 py-2 font-medium">Median</th>
-                  <th className="px-3 py-2 font-medium">Range</th>
-                  <th className="px-3 py-2 font-medium">Uplift vs raw</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/80">
-                {detail.graded.map((point) => (
-                  <tr key={`${point.gradeKey}-${point.finish ?? "base"}`}>
-                    <td className="px-3 py-2 text-slate-200">
-                      {point.gradeKey}
-                      {point.finish ? ` · ${point.finish}` : ""}
-                    </td>
-                    <td className="px-3 py-2 text-slate-400">{point.sampleSize}</td>
-                    <td className="px-3 py-2 text-white">
-                      {formatCurrency(point.median)}
-                    </td>
-                    <td className="px-3 py-2 text-slate-300">
-                      {formatRange(point.low, point.high)}
-                    </td>
-                    <td className="px-3 py-2 text-emerald-300">
-                      {point.uplift
-                        ? formatSignedCurrency(point.uplift)
-                        : "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      ) : null}
+          {folder === "pricing" ? (
+            <div className="space-y-6">
+              {detail.raw ? (
+                <div>
+                  <h3 className="text-sm font-medium text-slate-300">Raw</h3>
+                  <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <Stat label="FMV (median)" value={formatCurrency(detail.raw.median)} />
+                    <Stat label="Comp average" value={formatCurrency(detail.raw.average)} />
+                    <Stat
+                      label="Purchase range"
+                      value={formatRange(detail.raw.low, detail.raw.high)}
+                    />
+                    <Stat
+                      label="Comp sales range"
+                      value={formatRange(detail.raw.compMin, detail.raw.compMax)}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-400">No raw comps yet.</p>
+              )}
 
-      <GradingDeskPanel cardUuid={cardUuid} />
+              {detail.graded.length ? (
+                <div>
+                  <h3 className="text-sm font-medium text-slate-300">
+                    Graded pricing &amp; uplift
+                  </h3>
+                  <div className="mt-3 overflow-x-auto rounded-xl border border-slate-800/80">
+                    <table className="min-w-full text-left text-sm">
+                      <thead className="bg-slate-950/60 text-[11px] uppercase tracking-wide text-slate-500">
+                        <tr>
+                          <th className="px-3 py-2 font-medium">Grade</th>
+                          <th className="px-3 py-2 font-medium">Comps</th>
+                          <th className="px-3 py-2 font-medium">Median</th>
+                          <th className="px-3 py-2 font-medium">Range</th>
+                          <th className="px-3 py-2 font-medium">Uplift vs raw</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/80">
+                        {detail.graded.map((point) => (
+                          <tr key={`${point.gradeKey}-${point.finish ?? "base"}`}>
+                            <td className="px-3 py-2 text-slate-200">
+                              {point.gradeKey}
+                              {point.finish ? ` · ${point.finish}` : ""}
+                            </td>
+                            <td className="px-3 py-2 text-slate-400">
+                              {point.sampleSize}
+                            </td>
+                            <td className="px-3 py-2 text-white">
+                              {formatCurrency(point.median)}
+                            </td>
+                            <td className="px-3 py-2 text-slate-300">
+                              {formatRange(point.low, point.high)}
+                            </td>
+                            <td className="px-3 py-2 text-emerald-300">
+                              {point.uplift
+                                ? formatSignedCurrency(point.uplift)
+                                : "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
-      {comps?.comps.length ? (
-        <section
-          className={`rounded-2xl border border-slate-800 bg-slate-900/40 p-5 transition-opacity ${
-            sliceLoading ? "opacity-50" : ""
-          }`}
-        >
-          <h3 className="text-lg font-semibold text-white">Recent comps</h3>
-          <p className="mt-1 text-sm text-slate-400">
-            {comps.total} total · showing {comps.comps.length} for {gradeKey}
-          </p>
-          <div className="mt-4 overflow-x-auto rounded-xl border border-slate-800/80">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-slate-950/60 text-[11px] uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-3 py-2 font-medium">Date</th>
-                  <th className="px-3 py-2 font-medium">Price</th>
-                  <th className="px-3 py-2 font-medium">Grade</th>
-                  <th className="px-3 py-2 font-medium">Marketplace</th>
-                  <th className="px-3 py-2 font-medium">Listing</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/80">
-                {comps.comps.map((comp, index) => (
-                  <tr key={`${comp.sold_date ?? "unknown"}-${index}`}>
-                    <td className="px-3 py-2 text-slate-400">
-                      {comp.sold_date ?? "—"}
-                    </td>
-                    <td className="px-3 py-2 text-white">
-                      {formatCurrency(comp.sale_price)}
-                    </td>
-                    <td className="px-3 py-2 text-slate-400">
-                      {comp.grade_key ?? comp.grade ?? "—"}
-                      {comp.grade_unconfirmed ? (
-                        <span
-                          className="ml-1 cursor-help text-amber-400"
-                          title="Grade unconfirmed: no grade in the listing title, but priced like this card's graded copies — likely a graded sale, so don't read it as raw value."
-                        >
-                          ?
-                        </span>
-                      ) : null}
-                    </td>
-                    <td className="px-3 py-2 text-slate-400">
-                      {comp.marketplace}
-                    </td>
-                    <td className="max-w-xs truncate px-3 py-2 text-slate-500">
-                      {comp.title}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+          {folder === "history" ? (
+            <div>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-slate-400">
+                  {formatPriceHistoryRange(
+                    priceHistory?.start_date,
+                    priceHistory?.end_date,
+                  ) ?? "Last 90 days"}
+                </p>
+                {detail.gradeKeys.length > 1 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {detail.gradeKeys.map((key) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setGradeKey(key)}
+                        className={
+                          gradeKey === key
+                            ? "rounded-full border border-sky-400/40 bg-sky-400/10 px-3 py-1 text-sm text-sky-200"
+                            : "rounded-full border border-slate-700 px-3 py-1 text-sm text-slate-400 transition hover:border-slate-600 hover:text-slate-200"
+                        }
+                      >
+                        {key}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+              <div className={`mt-4 transition-opacity ${sliceLoading ? "opacity-50" : ""}`}>
+                <CardPriceChart
+                  points={priceHistory?.points ?? []}
+                  gradeKey={gradeKey}
+                  startDate={priceHistory?.start_date}
+                  endDate={priceHistory?.end_date}
+                />
+              </div>
+            </div>
+          ) : null}
+
+          {folder === "comps" ? (
+            comps?.comps.length ? (
+              <div className={sliceLoading ? "opacity-50" : ""}>
+                <p className="text-sm text-slate-400">
+                  {comps.total} total · showing {comps.comps.length} for {gradeKey}
+                </p>
+                <div className="mt-4 overflow-x-auto rounded-xl border border-slate-800/80">
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="bg-slate-950/60 text-[11px] uppercase tracking-wide text-slate-500">
+                      <tr>
+                        <th className="px-3 py-2 font-medium">Date</th>
+                        <th className="px-3 py-2 font-medium">Price</th>
+                        <th className="px-3 py-2 font-medium">Grade</th>
+                        <th className="px-3 py-2 font-medium">Marketplace</th>
+                        <th className="px-3 py-2 font-medium">Listing</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/80">
+                      {comps.comps.map((comp, index) => (
+                        <tr key={`${comp.sold_date ?? "unknown"}-${index}`}>
+                          <td className="px-3 py-2 text-slate-400">
+                            {comp.sold_date ?? "—"}
+                          </td>
+                          <td className="px-3 py-2 text-white">
+                            {formatCurrency(comp.sale_price)}
+                          </td>
+                          <td className="px-3 py-2 text-slate-400">
+                            {comp.grade_key ?? comp.grade ?? "—"}
+                            {comp.grade_unconfirmed ? (
+                              <span
+                                className="ml-1 cursor-help text-amber-400"
+                                title="Grade unconfirmed: no grade in the listing title, but priced like this card's graded copies — likely a graded sale, so don't read it as raw value."
+                              >
+                                ?
+                              </span>
+                            ) : null}
+                          </td>
+                          <td className="px-3 py-2 text-slate-400">
+                            {comp.marketplace}
+                          </td>
+                          <td className="max-w-xs truncate px-3 py-2 text-slate-500">
+                            {comp.title}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-400">No recent comps for {gradeKey}.</p>
+            )
+          ) : null}
+
+          {folder === "grade" ? <GradingDeskPanel cardUuid={cardUuid} /> : null}
+        </FolderTabs>
       ) : null}
 
     </div>
