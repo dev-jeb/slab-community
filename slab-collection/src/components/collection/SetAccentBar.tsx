@@ -1,16 +1,16 @@
 import { setAccent } from "@/lib/set-accent";
 
-interface SetAccentBarProps {
-  accentKey?: string | null;
-}
-
-/** Thin bottom edge — enough to cluster a grid, not enough to paint the card. */
-export function SetAccentBar({ accentKey }: SetAccentBarProps) {
+/**
+ * Quiet 3px set color along the bottom edge. Pointer-events stay off so it never
+ * steals clicks or hover from the card.
+ */
+export function SetAccentBar({ accentKey }: { accentKey?: string | null }) {
   if (!accentKey) return null;
+
   return (
     <span
       aria-hidden
-      className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-[3px] rounded-b-[0.7rem]"
+      className="pointer-events-none absolute inset-x-0 bottom-0 h-[3px] rounded-b-[0.7rem]"
       style={{ backgroundColor: setAccent(accentKey).bar }}
     />
   );

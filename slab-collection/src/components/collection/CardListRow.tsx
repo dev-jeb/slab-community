@@ -24,7 +24,7 @@ interface CardListRowProps {
 }
 
 /**
- * One card, as a row. Same two shapes as CardTile: a copy you own, or a catalog printing.
+ * One card, as a row. Two shapes: a copy you own, or a catalog printing.
  *
  * The last three columns are the ones that change. A copy reports serial / market / cost basis /
  * unrealized; a catalog printing reports print run / market / whether you own one — because

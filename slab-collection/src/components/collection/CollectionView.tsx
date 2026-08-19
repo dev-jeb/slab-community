@@ -4,7 +4,6 @@ import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 
 import { CardListRow } from "@/components/collection/CardListRow";
-import { CardTile } from "@/components/collection/CardTile";
 import { CollectionDuplicateGroups } from "@/components/collection/CollectionDuplicateGroups";
 import { CardFilterPills } from "@/components/collection/CardFilterPills";
 import { CollectionParallelGroups } from "@/components/collection/CollectionParallelGroups";
@@ -16,7 +15,6 @@ import {
   LoadMore,
   ResultsSkeleton,
   SearchToolbar,
-  ViewToggleGroup,
 } from "@/components/search/SearchToolbar";
 import { formatApiDetail } from "@/lib/api-errors";
 import { useIsMobile } from "@/lib/use-is-mobile";
@@ -61,8 +59,6 @@ import type {
 } from "@/lib/slab/types";
 import type { DashboardStats } from "@/lib/slab/types";
 
-type ViewMode = "grid" | "list";
-
 export function CollectionView() {
   // Every input that shapes WHICH cards show seeds from the URL and is written back to it below,
   // so a search survives refresh, Back from a card, and being pasted to someone else.
@@ -79,7 +75,6 @@ export function CollectionView() {
         "alpha_asc",
       ] as const) ?? "value_desc",
   );
-  const [view, setView] = useState<ViewMode>("grid");
   // Two independent axes: what you're looking at, and what's been narrowed out of it.
   const [browse, setBrowse] = useState<CollectionBrowseMode>(
     () =>
@@ -343,9 +338,6 @@ export function CollectionView() {
   const highlightCardNumber =
     sort === "card_number_asc" || sort === "card_number_desc";
 
-  // Grid/list is a card-layout choice; the grouped views render their own shapes.
-  const showViewToggle = browse === "cards";
-
   // Each handler only moves state; the effect above decides whether that state change actually
   // needs a new request. Previously these fired a fetch AND changed state, which refetched twice.
   function handleSortChange(nextSort: CollectionSortOption) {
@@ -385,13 +377,6 @@ export function CollectionView() {
             onCardSortChange={handleSortChange}
             groupSort={groupSort}
             onGroupSortChange={setGroupSort}
-          />
-        }
-        viewToggle={
-          <ViewToggleGroup
-            view={view}
-            onChange={setView}
-            hidden={!showViewToggle}
           />
         }
         tabs={
@@ -439,28 +424,16 @@ export function CollectionView() {
       ) : awaitingData ? (
         <ResultsSkeleton />
       ) : items.length > 0 ? (
-        view === "grid" && !isMobile ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {items.map((copy) => (
-              <CardTile
-                key={copy.uuid}
-                row={rowFromCopy(copy, ownedTotals.get(copy.card_uuid))}
-                highlightChecklist={highlightCardNumber}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {items.map((copy) => (
-              <CardListRow
-                key={copy.uuid}
-                row={rowFromCopy(copy, ownedTotals.get(copy.card_uuid))}
-                highlightChecklist={highlightCardNumber}
-                compact={isMobile}
-              />
-            ))}
-          </div>
-        )
+        <div className="space-y-3">
+          {items.map((copy) => (
+            <CardListRow
+              key={copy.uuid}
+              row={rowFromCopy(copy, ownedTotals.get(copy.card_uuid))}
+              highlightChecklist={highlightCardNumber}
+              compact={isMobile}
+            />
+          ))}
+        </div>
       ) : (
         <EmptyResults>No cards match this search.</EmptyResults>
       )}

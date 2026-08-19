@@ -4,7 +4,7 @@ import type { CardCopyOut, CardOut } from "@/lib/slab/types";
  * One row of a card search, whichever scope it came from.
  *
  * The collection and the catalog are the same question asked over two sets of cards — "which cards
- * match this?" — so they render through one tile and one list row. What differs is how much is
+ * match this?" — so they render through one list row. What differs is how much is
  * known about each: a collection row is a copy you own (it has a grade, a serial, what you paid),
  * a catalog row is the printing itself (it has a print run, pack odds, and how many of it you
  * happen to own). Everything shared — who's on it, which set, what it's worth — lives here.

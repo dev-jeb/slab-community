@@ -7,9 +7,9 @@ import { useEffect, useRef, type ReactNode } from "react";
  *
  * My Collection, Catalog and Sets are the same act — type something, narrow it, look at what came
  * back — so they should not each invent a layout. This owns the geometry and the wording: the
- * search box and its button on the left with sort and the view toggle beneath, whatever you're
- * looking at on the right. A scope passes only the controls that mean something to it (Sets has no
- * card filters; the catalog has no duplicates), and everything else lines up by construction.
+ * search box and its button on the left with sort beneath, whatever you're looking at on the
+ * right. A scope passes only the controls that mean something to it (Sets has no card filters; the
+ * catalog has no duplicates), and everything else lines up by construction.
  *
  * It stacks on mobile rather than hiding behind a filters sheet. There used to be one sheet, in the
  * collection view only — a second copy of the same controls that the other scopes never got, and
@@ -24,7 +24,6 @@ interface SearchToolbarProps {
   isPending?: boolean;
   /** Sort control — use SortSelect unless the options depend on the view. */
   sort?: ReactNode;
-  viewToggle?: ReactNode;
   /** What you're looking at: the Cards / Sets / Teams strip. */
   tabs?: ReactNode;
   /** What's narrowed out of it: the filter pills. */
@@ -38,7 +37,6 @@ export function SearchToolbar({
   placeholder,
   isPending = false,
   sort,
-  viewToggle,
   tabs,
   filters,
 }: SearchToolbarProps) {
@@ -82,10 +80,9 @@ export function SearchToolbar({
           </button>
         </div>
 
-        {sort || viewToggle ? (
+        {sort ? (
           <div className="flex flex-wrap items-center gap-3">
             {sort}
-            {viewToggle}
           </div>
         ) : null}
       </form>
@@ -132,39 +129,6 @@ export function SortSelect<T extends string>({
         ))}
       </select>
     </label>
-  );
-}
-
-/** Grid or list. Kept in the layout when a view can't use it, just hidden, so nothing reflows. */
-export function ViewToggleGroup({
-  view,
-  onChange,
-  hidden = false,
-}: {
-  view: "grid" | "list";
-  onChange: (view: "grid" | "list") => void;
-  hidden?: boolean;
-}) {
-  return (
-    <div
-      className={`flex gap-2 ${hidden ? "invisible" : ""}`}
-      aria-hidden={hidden}
-    >
-      {(["grid", "list"] as const).map((mode) => (
-        <button
-          key={mode}
-          type="button"
-          onClick={() => onChange(mode)}
-          className={`rounded-lg border px-3 py-2 text-sm capitalize ${
-            view === mode
-              ? "border-sky-500/50 bg-sky-500/10 text-sky-200"
-              : "border-slate-800 text-slate-400 hover:border-slate-600"
-          }`}
-        >
-          {mode}
-        </button>
-      ))}
-    </div>
   );
 }
 

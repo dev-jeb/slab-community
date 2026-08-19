@@ -4,7 +4,6 @@ import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 
 import { CardListRow } from "@/components/collection/CardListRow";
-import { CardTile } from "@/components/collection/CardTile";
 import { CardFilterPills, type OwnershipFilter } from "@/components/collection/CardFilterPills";
 import { CollectionBrowseTabs } from "@/components/collection/CollectionBrowseTabs";
 import { SetupPrompt } from "@/components/collection/SetupPrompt";
@@ -15,7 +14,6 @@ import {
   ResultsSkeleton,
   SearchToolbar,
   SortSelect,
-  ViewToggleGroup,
 } from "@/components/search/SearchToolbar";
 import { formatApiDetail } from "@/lib/api-errors";
 import { useIsMobile } from "@/lib/use-is-mobile";
@@ -47,8 +45,6 @@ import type {
  */
 const PAGE_SIZE = 48;
 const FACET_LIMIT = 200;
-
-type ViewMode = "grid" | "list";
 
 /** The API's sort grammar (`-` prefix = descending). FMV isn't a catalog sort key. */
 type CatalogSort = "-year" | "year" | "card_number" | "subject" | "set";
@@ -103,7 +99,6 @@ export function CatalogSearchView() {
         "set",
       ] as const) ?? "-year",
   );
-  const [view, setView] = useState<ViewMode>("list");
   // Drill-downs from the Sets and Teams tabs. A set is filtered by slug, which the facet doesn't
   // carry, so the name comes along to label the chip and the slug is resolved when it's picked.
   const [pickedSet, setPickedSet] = useState<{ slug: string; name: string } | null>(
@@ -328,13 +323,6 @@ export function CatalogSearchView() {
             disabled={browse !== "cards"}
           />
         }
-        viewToggle={
-          <ViewToggleGroup
-            view={view}
-            onChange={setView}
-            hidden={browse !== "cards"}
-          />
-        }
         tabs={
           <CollectionBrowseTabs
             value={browse}
@@ -377,19 +365,11 @@ export function CatalogSearchView() {
           onPick={browse === "sets" ? pickSet : pickTeam}
         />
       ) : rows.length > 0 ? (
-        view === "grid" && !isMobile ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {rows.map((row) => (
-              <CardTile key={row.key} row={row} />
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {rows.map((row) => (
-              <CardListRow key={row.key} row={row} compact={isMobile} />
-            ))}
-          </div>
-        )
+        <div className="space-y-3">
+          {rows.map((row) => (
+            <CardListRow key={row.key} row={row} compact={isMobile} />
+          ))}
+        </div>
       ) : (
         <EmptyResults>No cards match this search.</EmptyResults>
       )}
