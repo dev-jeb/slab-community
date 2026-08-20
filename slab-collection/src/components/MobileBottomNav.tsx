@@ -28,9 +28,10 @@ const primaryTabs = [
   },
 ];
 
+// Grading isn't here: the Grading Desk lives inside My Collection (`/?view=grading`), reachable
+// from that tab's view switcher.
 const moreLinks = [
   { href: "/sales", label: "Sales" },
-  { href: "/grading", label: "Grading" },
   { href: "/players", label: "Player pricing" },
   { href: "/news", label: "Alerts", showBadge: true },
 ];

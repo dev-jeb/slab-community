@@ -1,12 +1,12 @@
 import { redirect } from "next/navigation";
 
-import { CollectionOverview } from "@/components/collection/CollectionOverview";
+import { CollectionHome } from "@/components/collection/CollectionHome";
 
 /**
- * My Collection is the dashboard now — one job, no tabs.
- *
- * Searching moved to /search, where it works over your collection OR the whole catalog, so the
- * `?view=search` this page briefly used forwards there instead of rendering a second copy.
+ * My Collection: the Overview dashboard, plus the Grading Desk as a second view — both are about
+ * the cards you own, which is the bar for living under this roof. Anything that isn't (searching,
+ * the catalog) forwards elsewhere: the `?view=search` this page briefly used goes to /search,
+ * where one page covers your collection AND the whole catalog.
  */
 export default async function Home({
   searchParams,
@@ -23,5 +23,5 @@ export default async function Home({
     redirect(query ? `/search?${query}` : "/search");
   }
 
-  return <CollectionOverview />;
+  return <CollectionHome view={view === "grading" ? "grading" : "overview"} />;
 }

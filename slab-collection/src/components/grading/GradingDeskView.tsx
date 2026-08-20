@@ -13,7 +13,8 @@ import type {
 } from "@/lib/slab/types";
 
 /**
- * The Grading Desk sweep (/grading): every raw copy in the collection, desked and ranked
+ * The Grading Desk sweep (My Collection → Grading Desk, `/?view=grading`): every raw copy in the
+ * collection, desked and ranked
  * best-case first. This is the batch view where the per-card break-even bars become real odds —
  * graded as a group, wins at these bars pay for the losses.
  *

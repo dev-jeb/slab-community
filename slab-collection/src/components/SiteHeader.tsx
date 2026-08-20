@@ -11,12 +11,13 @@ import { useNews } from "@/components/news/NewsProvider";
 // didn't distinguish this one from Search (which also covers the catalog) or Chase Sets. The
 // possessive does. Browse is gone — it was a second, weaker search, and is now Search's catalog
 // scope.
+// Grading has no entry: the Grading Desk is a view over your own raw copies, so it lives inside
+// My Collection (`/?view=grading`), the way Portfolio does.
 const links = [
   { href: "/", label: "My Collection" },
   { href: "/search", label: "Search" },
   { href: "/chase", label: "Chase Sets" },
   { href: "/sales", label: "Sales" },
-  { href: "/grading", label: "Grading" },
   { href: "/news", label: "Alerts", showBadge: true },
 ];
 
