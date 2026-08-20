@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 
+import { LiquidityPace } from "@/components/card-detail/LiquidityPace";
 import { formatCurrency, formatSignedCurrency } from "@/lib/slab/format";
 import type { BreakEvenRegion, GradingDesk, MetricInfo } from "@/lib/slab/types";
 
@@ -131,6 +132,13 @@ export function GradingDeskPanel({ cardUuid }: { cardUuid: string }) {
                         !
                       </span>
                     ) : null}
+                    {/* A payoff at a grade that trades twice a year is a different wait than one
+                        that trades weekly. Conditional: lanes without liquidity render as before. */}
+                    <LiquidityPace
+                      liquidity={lane.liquidity}
+                      glossary={desk.glossary}
+                      className="ml-2 text-xs text-slate-500"
+                    />
                   </td>
                 </tr>
               ))}

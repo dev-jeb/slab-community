@@ -147,14 +147,7 @@ function RawPricingStats({ raw }: { raw: RawPriceSummary }) {
           {formatRange(raw.low, raw.high)}
         </p>
       </div>
-      <div>
-        <p className="text-[11px] uppercase tracking-wide text-slate-500">
-          Comp sales range
-        </p>
-        <p className="mt-1 text-sm font-medium text-white">
-          {formatRange(raw.compMin, raw.compMax)}
-        </p>
-      </div>
+      {/* No comp min/max here — the raw extremes are exactly the outliers the median trims. */}
       <div className="sm:col-span-2 lg:col-span-4">
         <PriceConfidenceBadge
           sampleSize={raw.compTotal || raw.sampleSize}

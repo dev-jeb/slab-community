@@ -10,12 +10,41 @@ export interface AttributeOut {
   value?: string | null;
 }
 
+/**
+ * Liquidity — how often one price key (card, finish, grade) actually sells.
+ *
+ * Descriptive, never prescriptive: the label states the observed pace; whether that pace makes
+ * something worth buying, selling, or holding is the reader's call. Render metric meaning from
+ * the response's `liquidity.*` glossary entries, not from captions written here.
+ */
+export type LiquidityLabel =
+  | "sells_daily"
+  | "sells_weekly"
+  | "sells_monthly"
+  | "sells_every_few_months"
+  | "sells_rarely"
+  | "no_recent_sales"
+  | "too_new_to_say";
+
+export interface Liquidity {
+  /** Real sales in the trailing 90 days — same window and comps as the FMV. */
+  sales_90d: number;
+  sales_365d: number;
+  /** Median gap between sales in the 90-day window; null when fewer than 3 sales landed there. */
+  median_days_between_sales?: number | null;
+  /** How long slab has been observing sales of this key, in days, capped at 365. */
+  observed_days: number;
+  label: LiquidityLabel;
+}
+
 export interface FmvSummary {
   fair_market_value: string;
   grade_key: string;
   low_confidence?: boolean;
   sample_size?: number;
   as_of_date?: string | null;
+  /** Populated on per-card views (market, grading desk); null on bulk search rows. */
+  liquidity?: Liquidity | null;
 }
 
 export interface CardOut {
@@ -297,6 +326,8 @@ export interface PricePointOut {
   low_confidence?: boolean;
   method?: string;
   currency?: string;
+  /** How often this exact price key actually sells — see the `liquidity.*` glossary. */
+  liquidity?: Liquidity | null;
 }
 
 export interface CardMarket {
@@ -308,6 +339,9 @@ export interface CardMarket {
   finish?: string | null;
   as_of_date?: string | null;
   price_points: PricePointOut[];
+  /** Meaning of the liquidity metrics on each price point (`liquidity.*` entries) — render THIS
+   *  text, don't caption the numbers here. Absent from API builds before liquidity landed. */
+  glossary?: Record<string, MetricInfo>;
 }
 
 export interface CompOut {
@@ -367,6 +401,9 @@ export interface GradeLanePayoff {
   sample_size: number;
   low_confidence?: boolean;
   as_of_date?: string | null;
+  /** How often this lane actually sells — a payoff at a grade that trades twice a year is a
+   *  different wait than one that trades weekly. Null until the API populates lanes. */
+  liquidity?: Liquidity | null;
 }
 
 export interface GradingDesk {

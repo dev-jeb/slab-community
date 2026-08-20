@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState, useTransition } from "react";
 
 import { CardPriceChart, formatPriceHistoryRange } from "@/components/card-detail/CardPriceChart";
 import { GradingDeskPanel } from "@/components/card-detail/GradingDeskPanel";
+import { LiquidityPace } from "@/components/card-detail/LiquidityPace";
 import { CopySaleActions } from "@/components/sales/CopySaleActions";
 import { OwnedCopyRow } from "@/components/collection/OwnedCopyRow";
 import { SetupPrompt } from "@/components/collection/SetupPrompt";
@@ -18,6 +19,7 @@ import {
   formatSignedCurrency,
 } from "@/lib/slab/format";
 import type { CardDetailResult, CardGradeSlice } from "@/lib/card-detail";
+import type { CompOut, Liquidity, MetricInfo } from "@/lib/slab/types";
 
 function formatRange(low?: string | null, high?: string | null): string {
   if (!low && !high) return "—";
@@ -49,6 +51,10 @@ export function CardDetailView({ cardUuid }: CardDetailViewProps) {
   // card and stays put, so switching grades doesn't blank the whole page. A slice for the wrong
   // grade is ignored rather than cleared, which is what makes switching back to RAW instant.
   const [slice, setSlice] = useState<CardGradeSlice | null>(null);
+  // The Sales tab's own filter — all grades by default, narrowed client-side from the one
+  // unfiltered comps load. Separate from gradeKey on purpose: picking a grade to inspect sales
+  // shouldn't silently swap the History chart out from under the other tab.
+  const [salesGrade, setSalesGrade] = useState("ALL");
   const [error, setError] = useState<string | null>(null);
   const [needsSetup, setNeedsSetup] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -85,6 +91,7 @@ export function CardDetailView({ cardUuid }: CardDetailViewProps) {
   useEffect(() => {
     setFolder("pricing");
     setGradeKey("RAW");
+    setSalesGrade("ALL");
   }, [cardUuid]);
 
   useEffect(() => {
@@ -99,15 +106,33 @@ export function CardDetailView({ cardUuid }: CardDetailViewProps) {
     });
   }, [cardUuid, gradeKey]);
 
-  // RAW comes from the full detail; other grades from their slice once it lands.
+  // RAW history comes from the full detail; other grades from their slice once it lands. Sales
+  // are grade-independent — loaded once for all grades, narrowed client-side by salesGrade.
   const activeSlice = gradeKey !== "RAW" && slice?.gradeKey === gradeKey ? slice : null;
-  const comps = activeSlice?.comps ?? detail?.comps;
+  const comps = detail?.comps;
   const priceHistory = activeSlice?.priceHistory ?? detail?.priceHistory;
   const sliceLoading = gradeKey !== "RAW" && !activeSlice && isSlicePending;
+
+  // The grade a comp displays as is the grade it filters as — one expression, no drift.
+  const compGrade = (comp: CompOut) => comp.grade_key ?? comp.grade ?? "—";
+  const saleGrades = [...new Set((comps?.comps ?? []).map(compGrade))].sort((a, b) => {
+    if (a === "RAW") return -1;
+    if (b === "RAW") return 1;
+    return a.localeCompare(b);
+  });
+  const visibleComps =
+    salesGrade === "ALL"
+      ? comps?.comps ?? []
+      : (comps?.comps ?? []).filter((comp) => compGrade(comp) === salesGrade);
 
   if (needsSetup) return <SetupPrompt />;
 
   const market = detail?.market;
+  // Old API builds send no liquidity at all — then the pricing table skips the column entirely
+  // rather than rendering a rail of dashes.
+  const pricingHasLiquidity = Boolean(
+    detail?.raw?.liquidity || detail?.graded.some((point) => point.liquidity),
+  );
   const ownedCount = detail
     ? detail.ownedCopies.reduce(
         (sum, copy) => sum + Math.max(copy.quantity, 1),
@@ -163,10 +188,19 @@ export function CardDetailView({ cardUuid }: CardDetailViewProps) {
                 {formatCurrency(detail?.raw?.median)}
               </p>
               {detail?.raw ? (
-                <PriceConfidenceBadge
-                  sampleSize={detail.raw.compTotal || detail.raw.sampleSize}
-                  lowConfidence={detail.raw.lowConfidence}
-                />
+                <>
+                  {/* sampleSize first: it's the count behind the FMV. compTotal only counts
+                      confirmed-raw rows among the loaded sales — a floor, for point-less cards. */}
+                  <PriceConfidenceBadge
+                    sampleSize={detail.raw.sampleSize || detail.raw.compTotal}
+                    lowConfidence={detail.raw.lowConfidence}
+                  />
+                  <LiquidityPace
+                    liquidity={detail.raw.liquidity}
+                    glossary={market.glossary}
+                    className="mt-1 block text-xs text-slate-400"
+                  />
+                </>
               ) : null}
             </>
           ) : null}
@@ -221,72 +255,67 @@ export function CardDetailView({ cardUuid }: CardDetailViewProps) {
           ) : null}
 
           {folder === "pricing" ? (
-            <div className="space-y-6">
-              {detail.raw ? (
-                <div>
-                  <h3 className="text-sm font-medium text-slate-300">Raw</h3>
-                  <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    <Stat label="FMV (median)" value={formatCurrency(detail.raw.median)} />
-                    <Stat label="Comp average" value={formatCurrency(detail.raw.average)} />
-                    <Stat
-                      label="Purchase range"
-                      value={formatRange(detail.raw.low, detail.raw.high)}
-                    />
-                    <Stat
-                      label="Comp sales range"
-                      value={formatRange(detail.raw.compMin, detail.raw.compMax)}
-                    />
-                  </div>
-                </div>
-              ) : (
-                <p className="text-sm text-slate-400">No raw comps yet.</p>
-              )}
-
-              {detail.graded.length ? (
-                <div>
-                  <h3 className="text-sm font-medium text-slate-300">
-                    Graded pricing &amp; uplift
-                  </h3>
-                  <div className="mt-3 overflow-x-auto rounded-xl border border-slate-800/80">
-                    <table className="min-w-full text-left text-sm">
-                      <thead className="bg-slate-950/60 text-[11px] uppercase tracking-wide text-slate-500">
-                        <tr>
-                          <th className="px-3 py-2 font-medium">Grade</th>
-                          <th className="px-3 py-2 font-medium">Comps</th>
-                          <th className="px-3 py-2 font-medium">Median</th>
-                          <th className="px-3 py-2 font-medium">Range</th>
-                          <th className="px-3 py-2 font-medium">Uplift vs raw</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-800/80">
-                        {detail.graded.map((point) => (
-                          <tr key={`${point.gradeKey}-${point.finish ?? "base"}`}>
-                            <td className="px-3 py-2 text-slate-200">
-                              {point.gradeKey}
-                              {point.finish ? ` · ${point.finish}` : ""}
-                            </td>
-                            <td className="px-3 py-2 text-slate-400">
-                              {point.sampleSize}
-                            </td>
-                            <td className="px-3 py-2 text-white">
-                              {formatCurrency(point.median)}
-                            </td>
-                            <td className="px-3 py-2 text-slate-300">
-                              {formatRange(point.low, point.high)}
-                            </td>
-                            <td className="px-3 py-2 text-emerald-300">
-                              {point.uplift
-                                ? formatSignedCurrency(point.uplift)
-                                : "—"}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              ) : null}
-            </div>
+            /* One table, one row per grade, RAW first — raw used to be a grid of stat blocks
+               above a graded table, and the two shapes read as different kinds of data when
+               they're the same five questions asked of every grade. (The comp min/max range is
+               gone on purpose: it surfaced exactly the outliers the median trims.) */
+            detail.raw || detail.graded.length ? (
+              <div className="overflow-x-auto rounded-xl border border-slate-800/80">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="bg-slate-950/60 text-[11px] uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th className="px-3 py-2 font-medium">Grade</th>
+                      <th className="px-3 py-2 font-medium">Comps</th>
+                      <th className="px-3 py-2 font-medium">Median</th>
+                      <th className="px-3 py-2 font-medium">Range</th>
+                      <th className="px-3 py-2 font-medium">Uplift vs raw</th>
+                      {pricingHasLiquidity ? (
+                        <th
+                          className="px-3 py-2 font-medium"
+                          title={market?.glossary?.["liquidity.label"]?.summary}
+                        >
+                          {market?.glossary?.["liquidity.label"]?.label ??
+                            "How often it sells"}
+                        </th>
+                      ) : null}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/80">
+                    {detail.raw ? (
+                      <PricingRow
+                        gradeKey="RAW"
+                        sampleSize={detail.raw.sampleSize}
+                        median={detail.raw.median}
+                        low={detail.raw.low}
+                        high={detail.raw.high}
+                        uplift={null}
+                        baseline
+                        liquidity={detail.raw.liquidity}
+                        showLiquidity={pricingHasLiquidity}
+                        glossary={market?.glossary}
+                      />
+                    ) : null}
+                    {detail.graded.map((point) => (
+                      <PricingRow
+                        key={`${point.gradeKey}-${point.finish ?? "base"}`}
+                        gradeKey={point.gradeKey}
+                        finish={point.finish}
+                        sampleSize={point.sampleSize}
+                        median={point.median}
+                        low={point.low}
+                        high={point.high}
+                        uplift={point.uplift}
+                        liquidity={point.liquidity}
+                        showLiquidity={pricingHasLiquidity}
+                        glossary={market?.glossary}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-400">No priced sales yet.</p>
+            )
           ) : null}
 
           {folder === "history" ? (
@@ -330,10 +359,31 @@ export function CardDetailView({ cardUuid }: CardDetailViewProps) {
 
           {folder === "comps" ? (
             comps?.comps.length ? (
-              <div className={sliceLoading ? "opacity-50" : ""}>
-                <p className="text-sm text-slate-400">
-                  {comps.total} total · showing {comps.comps.length} for {gradeKey}
-                </p>
+              <div>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm text-slate-400">
+                    {comps.total} sales · showing {visibleComps.length}
+                    {salesGrade !== "ALL" ? ` for ${salesGrade}` : ""}
+                  </p>
+                  {saleGrades.length > 1 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {["ALL", ...saleGrades].map((key) => (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => setSalesGrade(key)}
+                          className={
+                            salesGrade === key
+                              ? "rounded-full border border-sky-400/40 bg-sky-400/10 px-3 py-1 text-sm text-sky-200"
+                              : "rounded-full border border-slate-700 px-3 py-1 text-sm text-slate-400 transition hover:border-slate-600 hover:text-slate-200"
+                          }
+                        >
+                          {key === "ALL" ? "All" : key}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
                 <div className="mt-4 overflow-x-auto rounded-xl border border-slate-800/80">
                   <table className="min-w-full text-left text-sm">
                     <thead className="bg-slate-950/60 text-[11px] uppercase tracking-wide text-slate-500">
@@ -346,7 +396,7 @@ export function CardDetailView({ cardUuid }: CardDetailViewProps) {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/80">
-                      {comps.comps.map((comp, index) => (
+                      {visibleComps.map((comp, index) => (
                         <tr key={`${comp.sold_date ?? "unknown"}-${index}`}>
                           <td className="px-3 py-2 text-slate-400">
                             {comp.sold_date ?? "—"}
@@ -355,7 +405,7 @@ export function CardDetailView({ cardUuid }: CardDetailViewProps) {
                             {formatCurrency(comp.sale_price)}
                           </td>
                           <td className="px-3 py-2 text-slate-400">
-                            {comp.grade_key ?? comp.grade ?? "—"}
+                            {compGrade(comp)}
                             {comp.grade_unconfirmed ? (
                               <span
                                 className="ml-1 cursor-help text-amber-400"
@@ -378,7 +428,7 @@ export function CardDetailView({ cardUuid }: CardDetailViewProps) {
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-slate-400">No recent comps for {gradeKey}.</p>
+              <p className="text-sm text-slate-400">No recent sales.</p>
             )
           ) : null}
 
@@ -390,12 +440,54 @@ export function CardDetailView({ cardUuid }: CardDetailViewProps) {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function PricingRow({
+  gradeKey,
+  finish,
+  sampleSize,
+  median,
+  low,
+  high,
+  uplift,
+  baseline = false,
+  liquidity,
+  showLiquidity,
+  glossary,
+}: {
+  gradeKey: string;
+  finish?: string | null;
+  sampleSize: number;
+  median: string | null;
+  low?: string | null;
+  high?: string | null;
+  uplift: string | null;
+  /** The RAW row — the grade every uplift is measured against, so it shows the word, not a dash. */
+  baseline?: boolean;
+  liquidity?: Liquidity | null;
+  showLiquidity: boolean;
+  glossary?: Record<string, MetricInfo>;
+}) {
   return (
-    <div>
-      <p className="text-[11px] uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-sm font-medium text-white">{value}</p>
-    </div>
+    <tr>
+      <td className="px-3 py-2 text-slate-200">
+        {gradeKey}
+        {finish ? ` · ${finish}` : ""}
+      </td>
+      <td className="px-3 py-2 text-slate-400">{sampleSize}</td>
+      <td className="px-3 py-2 text-white">{formatCurrency(median)}</td>
+      <td className="px-3 py-2 text-slate-300">{formatRange(low, high)}</td>
+      <td className={`px-3 py-2 ${baseline ? "text-slate-500" : "text-emerald-300"}`}>
+        {baseline ? "baseline" : uplift ? formatSignedCurrency(uplift) : "—"}
+      </td>
+      {showLiquidity ? (
+        <td className="px-3 py-2 text-slate-300">
+          {liquidity ? (
+            <LiquidityPace liquidity={liquidity} glossary={glossary} />
+          ) : (
+            "—"
+          )}
+        </td>
+      ) : null}
+    </tr>
   );
 }
 

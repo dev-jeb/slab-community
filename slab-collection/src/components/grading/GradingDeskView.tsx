@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 
+import { LiquidityPace } from "@/components/card-detail/LiquidityPace";
 import { SetupPrompt } from "@/components/collection/SetupPrompt";
 import { formatCurrency, formatSignedCurrency } from "@/lib/slab/format";
 import type {
@@ -174,6 +175,15 @@ function SweepRow({ entry }: { entry: GradingDeskEntry }) {
       </td>
       <td className={`px-4 py-3 ${gem && Number(gem.payoff) >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
         {gem?.payoff != null ? formatSignedCurrency(gem.payoff) : "—"}
+        {/* The wait behind the win: a gem payoff at a grade that trades twice a year is a
+            different bet than one that trades weekly. Absent until the API desks lane liquidity. */}
+        {gem?.liquidity ? (
+          <LiquidityPace
+            liquidity={gem.liquidity}
+            glossary={desk.glossary}
+            className="block text-xs text-slate-500"
+          />
+        ) : null}
       </td>
       <td className={`px-4 py-3 ${miss && Number(miss.payoff) >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
         {miss?.payoff != null ? formatSignedCurrency(miss.payoff) : "—"}
