@@ -1,3 +1,5 @@
+import { fetchJson } from "@/lib/slab/fetch-json";
+
 const STORAGE_KEY = "slab-player-images-v1";
 const TTL_MS = 1000 * 60 * 60 * 24 * 30;
 
@@ -128,45 +130,38 @@ function settle(resolved: ResolvedImage[]): void {
 }
 
 async function fetchOne(name: string): Promise<string | null> {
-  try {
-    const response = await fetch(
-      `/api/player-image?name=${encodeURIComponent(name)}`,
-    );
-    if (!response.ok) return null;
-    const data = (await response.json()) as { url?: string | null };
-    return data.url ?? null;
-  } catch {
-    return null;
-  }
+  const result = await fetchJson<{ url?: string | null }>(
+    `/api/player-image?name=${encodeURIComponent(name)}`,
+  );
+  // A missing portrait is never an error worth surfacing — the avatar falls back to initials.
+  if (result.status !== "ok") return null;
+  return result.data.url ?? null;
 }
 
 async function fetchBatch(chunk: Array<[string, string]>): Promise<void> {
   const names = chunk.map(([, name]) => name);
 
-  try {
-    const response = await fetch("/api/player-images", {
+  const result = await fetchJson<{ images?: Record<string, string | null> }>(
+    "/api/player-images",
+    {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ names }),
-    });
+    },
+  );
 
-    if (response.ok) {
-      const data = (await response.json()) as {
-        images?: Record<string, string | null>;
-      };
-
-      settle(
-        chunk.map(([key, name]) => ({
-          key,
-          name,
-          url: data.images?.[key] ?? data.images?.[name] ?? null,
-        })),
-      );
-      return;
-    }
-  } catch {
-    // Fall back to individual lookups below.
+  if (result.status === "ok") {
+    const images = result.data.images;
+    settle(
+      chunk.map(([key, name]) => ({
+        key,
+        name,
+        url: images?.[key] ?? images?.[name] ?? null,
+      })),
+    );
+    return;
   }
+  // Anything else falls back to the individual lookups below.
 
   const urls = await Promise.all(names.map(fetchOne));
   settle(chunk.map(([key, name], index) => ({ key, name, url: urls[index] })));

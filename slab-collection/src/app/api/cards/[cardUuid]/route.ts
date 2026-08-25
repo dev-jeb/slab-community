@@ -1,17 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { fetchCardDetail, fetchCardGradeSlice } from "@/lib/card-detail";
-import { SlabApiError } from "@/lib/slab/client";
-
-function handleError(error: unknown) {
-  if (error instanceof SlabApiError) {
-    return NextResponse.json({ detail: error.message }, { status: error.status });
-  }
-
-  const message = error instanceof Error ? error.message : "Request failed";
-  const status = message.includes("SLAB_API_KEY") ? 503 : 500;
-  return NextResponse.json({ detail: message }, { status });
-}
+import { slabErrorResponse } from "@/lib/api-response";
 
 export async function GET(
   request: NextRequest,
@@ -34,6 +24,6 @@ export async function GET(
     const result = await fetchCardDetail(cardUuid, gradeKey);
     return NextResponse.json(result);
   } catch (error) {
-    return handleError(error);
+    return slabErrorResponse(error);
   }
 }

@@ -3,18 +3,8 @@ import { NextResponse } from "next/server";
 import {
   subscribeToCustomSet,
   unsubscribeFromCustomSet,
-  SlabApiError,
 } from "@/lib/slab/client";
-
-function handleError(error: unknown) {
-  if (error instanceof SlabApiError) {
-    return NextResponse.json({ detail: error.message }, { status: error.status });
-  }
-
-  const message = error instanceof Error ? error.message : "Request failed";
-  const status = message.includes("SLAB_API_KEY") ? 503 : 500;
-  return NextResponse.json({ detail: message }, { status });
-}
+import { slabErrorResponse } from "@/lib/api-response";
 
 export async function POST(
   _request: Request,
@@ -25,7 +15,7 @@ export async function POST(
     await subscribeToCustomSet(setUuid);
     return NextResponse.json({ subscribed: true });
   } catch (error) {
-    return handleError(error);
+    return slabErrorResponse(error);
   }
 }
 
@@ -38,6 +28,6 @@ export async function DELETE(
     await unsubscribeFromCustomSet(setUuid);
     return NextResponse.json({ subscribed: false });
   } catch (error) {
-    return handleError(error);
+    return slabErrorResponse(error);
   }
 }

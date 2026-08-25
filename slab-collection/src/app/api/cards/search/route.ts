@@ -1,17 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { getCollectorUuid, searchCards, SlabApiError } from "@/lib/slab/client";
+import { getCollectorUuid, searchCards } from "@/lib/slab/client";
 import type { CardSearchQuery } from "@/lib/slab/types";
-
-function handleError(error: unknown) {
-  if (error instanceof SlabApiError) {
-    return NextResponse.json({ detail: error.message }, { status: error.status });
-  }
-
-  const message = error instanceof Error ? error.message : "Request failed";
-  const status = message.includes("SLAB_API_KEY") ? 503 : 500;
-  return NextResponse.json({ detail: message }, { status });
-}
+import { slabErrorResponse } from "@/lib/api-response";
 
 /**
  * Every catalog search runs as YOU.
@@ -52,7 +43,7 @@ export async function GET(request: NextRequest) {
     const result = await searchCards(await withCollector(query));
     return NextResponse.json(result);
   } catch (error) {
-    return handleError(error);
+    return slabErrorResponse(error);
   }
 }
 
@@ -64,6 +55,6 @@ export async function POST(request: NextRequest) {
     );
     return NextResponse.json(result);
   } catch (error) {
-    return handleError(error);
+    return slabErrorResponse(error);
   }
 }

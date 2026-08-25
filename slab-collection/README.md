@@ -1,4 +1,4 @@
-# HockeyFrontEnd (Slab Collection)
+# Slab Collection
 
 A Next.js frontend for your [Slab](https://app.slab.dev-jeb.com) trading card collection — built to explore the Slab backend with a hockey card focus. Browse your cards, track portfolio value, research players, and drill into individual card pricing.
 
@@ -182,6 +182,7 @@ Click any card in your collection or player lookup results.
 |-------|-----|
 | "Setup required" on every page | Create `.env.local` from `.env.example` and set `SLAB_API_KEY` |
 | Empty collection | Add cards via `slab collection add` or the Slab app |
+| "Failed to load…" banners, but the key is set | Slab itself is unreachable or cold-starting. This is a different message from the setup prompt on purpose — retry, then check [status](https://api.slab.dev-jeb.com/health) |
 | Player lookup is slow | Fetches market + comps per variant in batches; narrow with card filters |
 
 ## Maintainer

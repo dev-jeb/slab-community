@@ -10,6 +10,7 @@ import {
 import { todayIsoDate } from "@/lib/sales";
 import { formatCurrency } from "@/lib/slab/format";
 import type { CardCopyOut, CardCopyUpdate } from "@/lib/slab/types";
+import { failureMessage, fetchJson } from "@/lib/slab/fetch-json";
 
 interface CopySaleActionsProps {
   copy: CardCopyOut;
@@ -30,15 +31,18 @@ export function CopySaleActions({ copy, onUpdated }: CopySaleActionsProps) {
   function patchCopy(body: CardCopyUpdate) {
     startTransition(async () => {
       setError(null);
-      const response = await fetch(`/api/sales/${copy.uuid}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      const result = await fetchJson<unknown>(
+        `/api/sales/${copy.uuid}`,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        },
+        "Update failed",
+      );
 
-      if (!response.ok) {
-        const payload = (await response.json()) as { detail?: string };
-        setError(payload.detail ?? "Update failed");
+      if (result.status !== "ok") {
+        setError(failureMessage(result));
         return;
       }
 

@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { formatApiDetail, isMissingApiKeyError } from "@/lib/api-errors";
+import { fetchJson } from "@/lib/slab/fetch-json";
 import {
   NEWS_COMP_BATCH_MAX,
   type NewsPayload,
@@ -96,48 +96,40 @@ export function NewsProvider({ children }: { children: ReactNode }) {
           .slice(offset, offset + NEWS_COMP_BATCH_MAX)
           .map((card) => card.cardUuid);
 
-        try {
-          const response = await fetch("/api/news/comps", {
+        const result = await fetchJson<{
+          comps?: Record<string, OwnedCardNews["comps"]>;
+        }>(
+          "/api/news/comps",
+          {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ cardUuids: slice }),
-          });
-          const body = (await response.json().catch(() => ({}))) as {
-            comps?: Record<string, OwnedCardNews["comps"]>;
-            detail?: unknown;
-          };
+          },
+          "Some comp checks failed. Alerts may be incomplete.",
+        );
 
-          if (generation !== compsGeneration.current) return;
+        if (generation !== compsGeneration.current) return;
 
-          if (isMissingApiKeyError(response.status, body.detail)) {
-            setNeedsSetup(true);
-            setIsLoadingComps(false);
-            return;
+        if (result.status === "setup") {
+          setNeedsSetup(true);
+          setIsLoadingComps(false);
+          return;
+        }
+
+        if (result.status === "error") {
+          setError(result.message);
+        } else {
+          for (const [cardUuid, comps] of Object.entries(result.data.comps ?? {})) {
+            const current = merged.get(cardUuid);
+            if (current) merged.set(cardUuid, { ...current, comps });
           }
 
-          if (!response.ok) {
-            setError(
-              formatApiDetail(
-                body.detail,
-                "Some comp checks failed. Alerts may be incomplete.",
-              ),
-            );
-          } else {
-            for (const [cardUuid, comps] of Object.entries(body.comps ?? {})) {
-              const current = merged.get(cardUuid);
-              if (current) merged.set(cardUuid, { ...current, comps });
-            }
-
-            const nextCards = ownedCards.map(
-              (card) => merged.get(card.cardUuid) ?? card,
-            );
-            setPayload((previous) =>
-              previous ? { ...previous, ownedCards: nextCards } : previous,
-            );
-          }
-        } catch {
-          if (generation !== compsGeneration.current) return;
-          setError("Some comp checks failed. Alerts may be incomplete.");
+          const nextCards = ownedCards.map(
+            (card) => merged.get(card.cardUuid) ?? card,
+          );
+          setPayload((previous) =>
+            previous ? { ...previous, ownedCards: nextCards } : previous,
+          );
         }
 
         setCompsLoaded(Math.min(offset + slice.length, total));
@@ -166,39 +158,37 @@ export function NewsProvider({ children }: { children: ReactNode }) {
     setCompsTotal(0);
 
     try {
-      const response = await fetch("/api/news");
-      const body = (await response.json().catch(() => ({}))) as NewsPayload & {
-        detail?: unknown;
-      };
+      const result = await fetchJson<NewsPayload>(
+        "/api/news",
+        undefined,
+        "Alerts timed out loading catalog news. Try again.",
+      );
 
-      if (isMissingApiKeyError(response.status, body.detail)) {
+      if (result.status === "setup") {
         setNeedsSetup(true);
         setPayload(null);
         return;
       }
 
-      if (!response.ok) {
+      if (result.status === "error") {
         setNeedsSetup(false);
-        setError(
-          formatApiDetail(
-            body.detail,
-            "Alerts timed out loading catalog news. Try again.",
-          ),
-        );
+        setError(result.message);
         return;
       }
 
-      setPayload(body);
+      const payload = result.data;
+      setPayload(payload);
       setNeedsSetup(false);
 
       if (!loadSetsSnapshot()) {
-        saveSetsSnapshot(body.sets);
+        saveSetsSnapshot(payload.sets);
       }
       setHasBaseline(hasNewsBaseline());
       setIsLoading(false);
 
-      await hydrateComps(body.ownedCards);
+      await hydrateComps(payload.ownedCards);
     } catch {
+      // fetchJson never throws; this covers the snapshot writes (a full localStorage quota).
       setError("Failed to load Slab News");
     } finally {
       setIsLoading(false);
@@ -215,14 +205,19 @@ export function NewsProvider({ children }: { children: ReactNode }) {
     };
   }, [refresh]);
 
+  // `snapshotVersion` is the dependency that matters and the one the rule can't see: the baseline
+  // these diff against lives in localStorage, so marking alerts seen changes the answer without
+  // changing any value in this closure. It bumps that counter; these recompute.
   const newSets = useMemo(() => {
     if (!payload || !hasBaseline) return [];
     return diffNewSets(payload.sets, loadSetsSnapshot());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [payload, hasBaseline, snapshotVersion]);
 
   const compAlerts = useMemo(() => {
     if (!payload || !hasBaseline) return [];
     return diffCompAlerts(payload.ownedCards, loadCompsSnapshot());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [payload, hasBaseline, snapshotVersion]);
 
   const alertCount = useMemo(() => {

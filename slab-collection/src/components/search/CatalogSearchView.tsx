@@ -15,7 +15,6 @@ import {
   SearchToolbar,
   SortSelect,
 } from "@/components/search/SearchToolbar";
-import { formatApiDetail } from "@/lib/api-errors";
 import { useIsMobile } from "@/lib/use-is-mobile";
 import { rowFromCard } from "@/lib/card-row";
 import { readUrlParam, writeUrlParams } from "@/lib/url-state";
@@ -30,6 +29,7 @@ import type {
   CardSearchResult,
   FacetCount,
 } from "@/lib/slab/types";
+import { fetchJson } from "@/lib/slab/fetch-json";
 
 /**
  * The same search, pointed at the whole catalog instead of your shelf.
@@ -165,55 +165,61 @@ export function CatalogSearchView() {
         offset,
       };
 
-      const response = await fetch("/api/cards/search", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      const result = await fetchJson<CardSearchResult>(
+        "/api/cards/search",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        },
+        "Catalog search failed",
+      );
 
-      if (response.status === 503) {
+      if (result.status === "setup") {
         setNeedsSetup(true);
         return null;
       }
 
-      if (!response.ok) {
-        const payload = (await response.json()) as { detail?: unknown };
-        setError(formatApiDetail(payload.detail, "Catalog search failed"));
+      if (result.status === "error") {
+        setError(result.message);
         return null;
       }
 
       setNeedsSetup(false);
-      return (await response.json()) as CardSearchResult;
+      return result.data;
     },
     [baseQuery, sort],
   );
 
   const runFacets = useCallback(
     async (dimension: "set" | "team"): Promise<CardSearchResult | null> => {
-      const response = await fetch("/api/cards/search", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          ...baseQuery,
-          facets: dimension,
-          // The rows aren't rendered in a grouped view; only the counts are.
-          limit: 1,
-        }),
-      });
+      const result = await fetchJson<CardSearchResult>(
+        "/api/cards/search",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            ...baseQuery,
+            facets: dimension,
+            // The rows aren't rendered in a grouped view; only the counts are.
+            limit: 1,
+          }),
+        },
+        "Catalog search failed",
+      );
 
-      if (response.status === 503) {
+      if (result.status === "setup") {
         setNeedsSetup(true);
         return null;
       }
 
-      if (!response.ok) {
-        const payload = (await response.json()) as { detail?: unknown };
-        setError(formatApiDetail(payload.detail, "Catalog search failed"));
+      if (result.status === "error") {
+        setError(result.message);
         return null;
       }
 
       setNeedsSetup(false);
-      return (await response.json()) as CardSearchResult;
+      return result.data;
     },
     [baseQuery],
   );
@@ -414,13 +420,9 @@ export function CatalogSearchView() {
  * and already an endpoint, so one lookup resolves it rather than teaching the API a new filter.
  */
 async function resolveSetSlug(name: string): Promise<string | null> {
-  const response = await fetch("/api/sets");
-  if (!response.ok) return null;
-
-  const data = (await response.json()) as {
-    sets: { name: string; slug: string }[];
-  };
-  return data.sets.find((set) => set.name === name)?.slug ?? null;
+  const result = await fetchJson<{ sets: { name: string; slug: string }[] }>("/api/sets");
+  if (result.status !== "ok") return null;
+  return result.data.sets.find((set) => set.name === name)?.slug ?? null;
 }
 
 function FacetList({

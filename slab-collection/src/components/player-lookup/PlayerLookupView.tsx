@@ -14,6 +14,7 @@ import type {
   PlayerVariant,
   RawPriceSummary,
 } from "@/lib/player-lookup";
+import { fetchJson } from "@/lib/slab/fetch-json";
 
 type CardTypeFilter = "all" | "auto" | "rookie" | "numbered";
 type SortMode = "price-desc" | "price-asc" | "confidence-desc" | "set";
@@ -379,32 +380,34 @@ export function PlayerLookupView({ embedded = false }: { embedded?: boolean }) {
     startTransition(async () => {
       setError(null);
 
-      const response = await fetch("/api/player-lookup", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          subject: player.trim(),
-          q: cardQuery.trim() || undefined,
-          auto: cardType === "auto" ? true : undefined,
-          rookie: cardType === "rookie" ? true : undefined,
-          is_numbered: cardType === "numbered" ? true : undefined,
-        }),
-      });
+      const result = await fetchJson<PlayerLookupResult>(
+        "/api/player-lookup",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            subject: player.trim(),
+            q: cardQuery.trim() || undefined,
+            auto: cardType === "auto" ? true : undefined,
+            rookie: cardType === "rookie" ? true : undefined,
+            is_numbered: cardType === "numbered" ? true : undefined,
+          }),
+        },
+        "Search failed",
+      );
 
-      if (response.status === 503) {
+      if (result.status === "setup") {
         setNeedsSetup(true);
         return;
       }
 
-      if (!response.ok) {
-        const body = (await response.json()) as { detail?: string };
-        setError(body.detail ?? "Search failed");
+      if (result.status === "error") {
+        setError(result.message);
         return;
       }
 
-      const data = (await response.json()) as PlayerLookupResult;
-      setResult(data);
-      setSelectedUuid(data.variants[0]?.card.uuid ?? null);
+      setResult(result.data);
+      setSelectedUuid(result.data.variants[0]?.card.uuid ?? null);
     });
   }
 

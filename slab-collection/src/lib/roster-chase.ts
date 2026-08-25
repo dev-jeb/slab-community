@@ -59,9 +59,3 @@ export function groupCardsByPlayer(cards: CardOut[]): PlayerCardGroup[] {
     .sort((a, b) => a.playerName.localeCompare(b.playerName));
 }
 
-export interface RosterSlotResult {
-  player: string;
-  status: "added" | "skipped";
-  cardUuid?: string;
-  cardLabel?: string;
-}

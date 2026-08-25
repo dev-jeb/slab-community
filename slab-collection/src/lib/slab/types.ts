@@ -189,10 +189,6 @@ export interface GroupResult<T> {
   items?: T[];
 }
 
-export type SetGroupResult = GroupResult<SetGroupOut>;
-export type DuplicateGroupResult = GroupResult<DuplicateGroupOut>;
-export type TeamGroupResult = GroupResult<TeamGroupOut>;
-
 export interface CollectionSearchQuery {
   q?: string | null;
   subject?: string | null;

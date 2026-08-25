@@ -26,6 +26,7 @@ import {
   ownedSerialLabel,
 } from "@/lib/slab/format";
 import type { CardCopyOut, CardCopyUpdate } from "@/lib/slab/types";
+import { failureMessage, fetchJson } from "@/lib/slab/fetch-json";
 
 type SalesTab = "for_sale" | "sold";
 
@@ -78,15 +79,18 @@ function ForSaleRow({
   function patchCopy(body: CardCopyUpdate, onSuccess?: () => void) {
     startTransition(async () => {
       setError(null);
-      const response = await fetch(`/api/sales/${copy.uuid}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      const result = await fetchJson<unknown>(
+        `/api/sales/${copy.uuid}`,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        },
+        "Update failed",
+      );
 
-      if (!response.ok) {
-        const payload = (await response.json()) as { detail?: string };
-        setError(payload.detail ?? "Update failed");
+      if (result.status !== "ok") {
+        setError(failureMessage(result));
         return;
       }
 
@@ -344,20 +348,23 @@ export function SalesView({ embedded = false }: { embedded?: boolean }) {
   const loadSales = useCallback(() => {
     startTransition(async () => {
       setError(null);
-      const response = await fetch("/api/sales");
+      const result = await fetchJson<SalesPayload>(
+        "/api/sales",
+        undefined,
+        "Failed to load sales",
+      );
 
-      if (response.status === 503) {
+      if (result.status === "setup") {
         setNeedsSetup(true);
         return;
       }
 
-      if (!response.ok) {
-        const body = (await response.json()) as { detail?: string };
-        setError(body.detail ?? "Failed to load sales");
+      if (result.status === "error") {
+        setError(result.message);
         return;
       }
 
-      setPayload(await response.json());
+      setPayload(result.data);
       setNeedsSetup(false);
     });
   }, []);

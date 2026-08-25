@@ -1,21 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { fetchOwnedCardComps, NEWS_COMP_BATCH_MAX } from "@/lib/slab-news";
-import { SlabApiError } from "@/lib/slab/client";
-
-function handleError(error: unknown) {
-  if (error instanceof SlabApiError) {
-    const status =
-      error.status === 503 && !error.message.includes("SLAB_API_KEY")
-        ? 504
-        : error.status;
-    return NextResponse.json({ detail: error.message }, { status });
-  }
-
-  const message = error instanceof Error ? error.message : "Request failed";
-  const status = message.includes("SLAB_API_KEY") ? 503 : 500;
-  return NextResponse.json({ detail: message }, { status });
-}
+import { slabErrorResponse } from "@/lib/api-response";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -31,6 +17,6 @@ export async function POST(request: Request) {
     const comps = await fetchOwnedCardComps(cardUuids);
     return NextResponse.json({ comps });
   } catch (error) {
-    return handleError(error);
+    return slabErrorResponse(error);
   }
 }

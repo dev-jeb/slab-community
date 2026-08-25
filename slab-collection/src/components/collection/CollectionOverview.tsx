@@ -17,6 +17,7 @@ import { collectionSetSearchHref } from "@/lib/url-state";
 import { SetAccentBar } from "@/components/collection/SetAccentBar";
 import type { SetPortfolioSummary } from "@/lib/portfolio-sets";
 import type { DashboardStats, HighlightCard, PortfolioHistory } from "@/lib/slab/types";
+import { fetchJson } from "@/lib/slab/fetch-json";
 
 /**
  * The standing answer to "how is my collection doing" — money first, then what's actually in it.
@@ -38,28 +39,25 @@ export function CollectionOverview() {
   useEffect(() => {
     startTransition(async () => {
       setError(null);
-      const response = await fetch("/api/portfolio");
+      const result = await fetchJson<{
+        dashboard: DashboardStats;
+        history: PortfolioHistory;
+        topSetsByValue?: SetPortfolioSummary[];
+      }>("/api/portfolio", undefined, "Failed to load your collection");
 
-      if (response.status === 503) {
+      if (result.status === "setup") {
         setNeedsSetup(true);
         return;
       }
 
-      if (!response.ok) {
-        const body = (await response.json()) as { detail?: string };
-        setError(body.detail ?? "Failed to load your collection");
+      if (result.status === "error") {
+        setError(result.message);
         return;
       }
 
-      const data = (await response.json()) as {
-        dashboard: DashboardStats;
-        history: PortfolioHistory;
-        topSetsByValue?: SetPortfolioSummary[];
-      };
-
-      setDashboard(data.dashboard);
-      setHistory(data.history);
-      setTopSetsByValue(data.topSetsByValue ?? []);
+      setDashboard(result.data.dashboard);
+      setHistory(result.data.history);
+      setTopSetsByValue(result.data.topSetsByValue ?? []);
     });
   }, []);
 

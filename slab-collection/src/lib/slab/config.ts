@@ -1,3 +1,5 @@
+import { MissingApiKeyError } from "./errors";
+
 const DEFAULT_API_URL = "https://api.slab.dev-jeb.com";
 
 export function getSlabConfig() {
@@ -16,7 +18,7 @@ export function requireSlabConfig(): {
   const config = getSlabConfig();
 
   if (!config.apiKey) {
-    throw new Error(
+    throw new MissingApiKeyError(
       "SLAB_API_KEY is not set. Mint a key at https://app.slab.dev-jeb.com and add it to .env.local",
     );
   }

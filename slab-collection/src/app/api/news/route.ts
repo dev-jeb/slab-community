@@ -1,28 +1,13 @@
 import { NextResponse } from "next/server";
 
 import { buildNewsPayload } from "@/lib/slab-news";
-import { SlabApiError } from "@/lib/slab/client";
-
-function handleError(error: unknown) {
-  if (error instanceof SlabApiError) {
-    // Upstream 503 is Slab overloaded/timing out, not a missing local key.
-    const status =
-      error.status === 503 && !error.message.includes("SLAB_API_KEY")
-        ? 504
-        : error.status;
-    return NextResponse.json({ detail: error.message }, { status });
-  }
-
-  const message = error instanceof Error ? error.message : "Request failed";
-  const status = message.includes("SLAB_API_KEY") ? 503 : 500;
-  return NextResponse.json({ detail: message }, { status });
-}
+import { slabErrorResponse } from "@/lib/api-response";
 
 export async function GET() {
   try {
     const payload = await buildNewsPayload();
     return NextResponse.json(payload);
   } catch (error) {
-    return handleError(error);
+    return slabErrorResponse(error);
   }
 }

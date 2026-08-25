@@ -10,6 +10,7 @@ import {
   type ChaseSetVisibility,
 } from "@/lib/chase-filter";
 import type { CustomSetOut } from "@/lib/slab/types";
+import { failureMessage, fetchJson } from "@/lib/slab/fetch-json";
 
 interface ChaseSetWizardProps {
   onCreated: (set: CustomSetOut, slotCount?: number) => void;
@@ -100,20 +101,23 @@ export function ChaseSetWizard({ onCreated }: ChaseSetWizardProps) {
 
     startTransition(async () => {
       try {
-        const response = await fetch("/api/chase/preview", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ filter }),
-        });
+        const result = await fetchJson<PreviewPayload>(
+          "/api/chase/preview",
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ filter }),
+          },
+          "Preview failed",
+        );
 
-        if (!response.ok) {
-          const body = (await response.json()) as { detail?: string };
-          setError(body.detail ?? "Preview failed");
+        if (result.status !== "ok") {
+          setError(failureMessage(result));
           setStep("filters");
           return;
         }
 
-        setPreview((await response.json()) as PreviewPayload);
+        setPreview(result.data);
       } finally {
         setPreviewLoading(false);
       }
@@ -126,31 +130,34 @@ export function ChaseSetWizard({ onCreated }: ChaseSetWizardProps) {
 
     startTransition(async () => {
       try {
-        const response = await fetch("/api/chase/create", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            name: name.trim(),
-            description: description.trim() || null,
-            mode,
-            visibility,
-            filter,
-          }),
-        });
-
-        if (!response.ok) {
-          const body = (await response.json()) as { detail?: string };
-          setError(body.detail ?? "Failed to create chase set");
-          return;
-        }
-
-        const payload = (await response.json()) as {
+        const result = await fetchJson<{
           set: CustomSetOut;
           mode: ChaseSetMode;
           added: number;
           playerCount?: number;
           totalCards?: number | null;
-        };
+        }>(
+          "/api/chase/create",
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              name: name.trim(),
+              description: description.trim() || null,
+              mode,
+              visibility,
+              filter,
+            }),
+          },
+          "Failed to create chase set",
+        );
+
+        if (result.status !== "ok") {
+          setError(failureMessage(result));
+          return;
+        }
+
+        const payload = result.data;
 
         setCreateResult({
           added: payload.added,

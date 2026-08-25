@@ -6,6 +6,8 @@ import { useCallback, useEffect, useState, useTransition } from "react";
 
 import { cardSubtitle, cardTitle } from "@/lib/slab/format";
 import type { CustomSetDetail, CustomSetOut } from "@/lib/slab/types";
+import { CompletionMeter } from "@/components/ui/CompletionMeter";
+import { failureMessage, fetchJson } from "@/lib/slab/fetch-json";
 
 function setTypeLabel(setType: string): string {
   return setType === "dynamic" ? "Master (dynamic)" : "Roster (curated)";
@@ -19,13 +21,16 @@ function CommunitySetDetail({ setUuid }: { setUuid: string }) {
   useEffect(() => {
     startTransition(async () => {
       setError(null);
-      const response = await fetch(`/api/chase/${setUuid}`);
-      if (!response.ok) {
-        const body = (await response.json()) as { detail?: string };
-        setError(body.detail ?? "Failed to load set");
+      const result = await fetchJson<CustomSetDetail>(
+        `/api/chase/${setUuid}`,
+        undefined,
+        "Failed to load set",
+      );
+      if (result.status !== "ok") {
+        setError(failureMessage(result));
         return;
       }
-      setDetail((await response.json()) as CustomSetDetail);
+      setDetail(result.data);
     });
   }, [setUuid]);
 
@@ -55,25 +60,13 @@ function CommunitySetDetail({ setUuid }: { setUuid: string }) {
   return (
     <div className="mt-3 space-y-3 rounded-lg border border-slate-800 bg-slate-950/50 p-4">
       {completion ? (
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p className="text-[11px] uppercase tracking-wider text-slate-500">
-              Your completion
-            </p>
-            <p className="text-2xl font-semibold text-sky-300">
-              {completion.completion_pct.toFixed(1)}%
-            </p>
-            <p className="text-sm text-slate-400">
-              {completion.owned_cards} of {completion.total_cards} slots owned
-            </p>
-          </div>
-          <div className="h-2 w-full max-w-xs overflow-hidden rounded-full bg-slate-800 sm:w-40">
-            <div
-              className="h-full rounded-full bg-sky-500"
-              style={{ width: `${Math.min(completion.completion_pct, 100)}%` }}
-            />
-          </div>
-        </div>
+        <CompletionMeter
+          label="Your completion"
+          pct={completion.completion_pct}
+          ownedCards={completion.owned_cards}
+          totalCards={completion.total_cards}
+          size="md"
+        />
       ) : (
         <p className="text-sm text-slate-400">
           Subscribe to track your completion against this set.
@@ -148,13 +141,14 @@ function CommunitySetRow({
     const method = set.is_subscribed ? "DELETE" : "POST";
 
     try {
-      const response = await fetch(`/api/chase/${set.uuid}/subscribe`, {
-        method,
-      });
+      const result = await fetchJson<unknown>(
+        `/api/chase/${set.uuid}/subscribe`,
+        { method },
+        "Subscribe failed",
+      );
 
-      if (!response.ok) {
-        const body = (await response.json()) as { detail?: string };
-        setError(body.detail ?? "Subscribe failed");
+      if (result.status !== "ok") {
+        setError(failureMessage(result));
         return;
       }
 
@@ -253,15 +247,17 @@ export function CommunityChaseSetsView() {
         ? `/api/chase/discover?q=${encodeURIComponent(trimmed)}`
         : "/api/chase/community";
 
-      const response = await fetch(endpoint);
-      if (!response.ok) {
-        const body = (await response.json()) as { detail?: string };
-        setError(body.detail ?? "Failed to load community sets");
+      const result = await fetchJson<{ sets: CustomSetOut[] }>(
+        endpoint,
+        undefined,
+        "Failed to load community sets",
+      );
+      if (result.status !== "ok") {
+        setError(failureMessage(result));
         return;
       }
 
-      const data = (await response.json()) as { sets: CustomSetOut[] };
-      setSets(data.sets);
+      setSets(result.data.sets);
     });
   }, []);
 

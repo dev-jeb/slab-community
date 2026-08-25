@@ -16,7 +16,6 @@ import {
   ResultsSkeleton,
   SearchToolbar,
 } from "@/components/search/SearchToolbar";
-import { formatApiDetail } from "@/lib/api-errors";
 import { useIsMobile } from "@/lib/use-is-mobile";
 import { rowFromCopy } from "@/lib/card-row";
 import { readUrlParam, writeUrlParams } from "@/lib/url-state";
@@ -58,6 +57,7 @@ import type {
   TeamGroupOut,
 } from "@/lib/slab/types";
 import type { DashboardStats } from "@/lib/slab/types";
+import { fetchJson } from "@/lib/slab/fetch-json";
 
 export function CollectionView() {
   // Every input that shapes WHICH cards show seeds from the URL and is written back to it below,
@@ -142,21 +142,24 @@ export function CollectionView() {
         offset,
       });
 
-      const response = await fetch(`/api/collection?${params.toString()}`);
+      const result = await fetchJson<CollectionResult>(
+        `/api/collection?${params.toString()}`,
+        undefined,
+        "Failed to load collection",
+      );
 
-      if (response.status === 503) {
+      if (result.status === "setup") {
         setNeedsSetup(true);
         return null;
       }
 
-      if (!response.ok) {
-        const body = (await response.json()) as { detail?: unknown };
-        setError(formatApiDetail(body.detail, "Failed to load collection"));
+      if (result.status === "error") {
+        setError(result.message);
         return null;
       }
 
       setNeedsSetup(false);
-      return (await response.json()) as CollectionResult;
+      return result.data;
     },
     [filter, sort],
   );
@@ -164,36 +167,39 @@ export function CollectionView() {
   const fetchGroups = useCallback(async (): Promise<GroupResult<unknown> | null> => {
     if (!groupKind) return null;
 
-    const response = await fetch(`/api/collection/groups/${groupKind}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        // The filter narrows the copies BEFORE they're rolled up, so "rookies, by set" is one
-        // request rather than a set list the browser has to re-filter.
-        ...groupFilterParams(filter),
-        // "Most players" is ordered in the teams view itself; the server has no such key, so ask
-        // for the nearest thing and let that view refine it.
-        group_sort: groupSort === TEAM_PLAYERS_SORT ? "-copies" : groupSort,
-        // Sets and teams fill a group in on expand (useGroupCopies), which took those lists
-        // from ~9s to ~0.7s. Duplicates keeps its copies: the list is small, and a duplicate
-        // group is one card, which the collection filters can't single out on their own.
-        include_copies: groupKind === "duplicates",
-      }),
-    });
+    const result = await fetchJson<GroupResult<unknown>>(
+      `/api/collection/groups/${groupKind}`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          // The filter narrows the copies BEFORE they're rolled up, so "rookies, by set" is one
+          // request rather than a set list the browser has to re-filter.
+          ...groupFilterParams(filter),
+          // "Most players" is ordered in the teams view itself; the server has no such key, so
+          // ask for the nearest thing and let that view refine it.
+          group_sort: groupSort === TEAM_PLAYERS_SORT ? "-copies" : groupSort,
+          // Sets and teams fill a group in on expand (useGroupCopies), which took those lists
+          // from ~9s to ~0.7s. Duplicates keeps its copies: the list is small, and a duplicate
+          // group is one card, which the collection filters can't single out on their own.
+          include_copies: groupKind === "duplicates",
+        }),
+      },
+      "Failed to load groups",
+    );
 
-    if (response.status === 503) {
+    if (result.status === "setup") {
       setNeedsSetup(true);
       return null;
     }
 
-    if (!response.ok) {
-      const body = (await response.json()) as { detail?: unknown };
-      setError(formatApiDetail(body.detail, "Failed to load groups"));
+    if (result.status === "error") {
+      setError(result.message);
       return null;
     }
 
     setNeedsSetup(false);
-    return (await response.json()) as GroupResult<unknown>;
+    return result.data;
   }, [filter, groupKind, groupSort]);
 
   const loadCollection = useCallback(() => {
@@ -240,10 +246,9 @@ export function CollectionView() {
 
   useEffect(() => {
     startTransition(async () => {
-      const response = await fetch("/api/dashboard");
-      if (response.ok) {
-        setStats((await response.json()) as DashboardStats);
-      }
+      const result = await fetchJson<DashboardStats>("/api/dashboard");
+      // A missing dashboard just leaves the summary strip empty; the copies below still render.
+      if (result.status === "ok") setStats(result.data);
     });
   }, []);
 

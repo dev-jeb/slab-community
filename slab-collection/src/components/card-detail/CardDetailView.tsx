@@ -24,6 +24,7 @@ import {
 } from "@/lib/slab/format";
 import type { CardDetailResult, CardGradeSlice } from "@/lib/card-detail";
 import type { CompOut, Liquidity, MetricInfo } from "@/lib/slab/types";
+import { fetchJson } from "@/lib/slab/fetch-json";
 
 function formatRange(low?: string | null, high?: string | null): string {
   if (!low && !high) return "—";
@@ -123,21 +124,23 @@ export function CardDetailView({ cardUuid }: CardDetailViewProps) {
     startTransition(async () => {
       setError(null);
 
-      const response = await fetch(`/api/cards/${activeUuid}`);
+      const result = await fetchJson<CardDetailResult>(
+        `/api/cards/${activeUuid}`,
+        undefined,
+        "Failed to load card",
+      );
 
-      if (response.status === 503) {
+      if (result.status === "setup") {
         setNeedsSetup(true);
         return;
       }
 
-      if (!response.ok) {
-        const body = (await response.json()) as { detail?: string };
-        setError(body.detail ?? "Failed to load card");
+      if (result.status === "error") {
+        setError(result.message);
         return;
       }
 
-      const data = (await response.json()) as CardDetailResult;
-      setDetail(data);
+      setDetail(result.data);
       setNeedsSetup(false);
     });
   }, [activeUuid]);
@@ -150,11 +153,11 @@ export function CardDetailView({ cardUuid }: CardDetailViewProps) {
     if (gradeKey === "RAW") return;
 
     startSliceTransition(async () => {
-      const response = await fetch(
+      const result = await fetchJson<CardGradeSlice>(
         `/api/cards/${activeUuid}?slice=grade&grade_key=${encodeURIComponent(gradeKey)}`,
       );
-      if (!response.ok) return;
-      setSlice((await response.json()) as CardGradeSlice);
+      // A failed slice leaves the RAW view standing rather than replacing it with an error.
+      if (result.status === "ok") setSlice(result.data);
     });
   }, [activeUuid, gradeKey]);
 

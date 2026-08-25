@@ -8,17 +8,8 @@ import {
 } from "@/lib/chase-filter";
 import { groupCardsByPlayer } from "@/lib/roster-chase";
 import { cardSubtitle, cardTitle } from "@/lib/slab/format";
-import { fetchAllMatchingCards, SlabApiError } from "@/lib/slab/client";
-
-function handleError(error: unknown) {
-  if (error instanceof SlabApiError) {
-    return NextResponse.json({ detail: error.message }, { status: error.status });
-  }
-
-  const message = error instanceof Error ? error.message : "Request failed";
-  const status = message.includes("SLAB_API_KEY") ? 503 : 500;
-  return NextResponse.json({ detail: message }, { status });
-}
+import { fetchAllMatchingCards } from "@/lib/slab/client";
+import { slabErrorResponse } from "@/lib/api-response";
 
 export async function POST(request: Request) {
   try {
@@ -50,6 +41,6 @@ export async function POST(request: Request) {
       rosterReady: playerGroups.some((group) => group.representative),
     });
   } catch (error) {
-    return handleError(error);
+    return slabErrorResponse(error);
   }
 }

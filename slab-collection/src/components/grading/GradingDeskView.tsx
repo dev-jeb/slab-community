@@ -12,6 +12,7 @@ import type {
   GradingDeskEntry,
   MetricInfo,
 } from "@/lib/slab/types";
+import { fetchJson } from "@/lib/slab/fetch-json";
 
 /**
  * The Grading Desk sweep (My Collection → Grading Desk, `/?view=grading`): every raw copy in the
@@ -34,21 +35,20 @@ export function GradingDeskView() {
   const load = useCallback((fee: string) => {
     startTransition(async () => {
       setError(null);
-      try {
-        const params = fee ? `?fee=${encodeURIComponent(fee)}` : "";
-        const response = await fetch(`/api/grading${params}`);
-        const body = await response.json();
-        if (!response.ok) {
-          if (response.status === 503) {
-            setNeedsSetup(true);
-            return;
-          }
-          throw new Error(typeof body?.detail === "string" ? body.detail : "Request failed");
-        }
-        setSweep(body as CollectionGradingDesk);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Request failed");
+      const params = fee ? `?fee=${encodeURIComponent(fee)}` : "";
+      const result = await fetchJson<CollectionGradingDesk>(`/api/grading${params}`);
+
+      if (result.status === "setup") {
+        setNeedsSetup(true);
+        return;
       }
+
+      if (result.status === "error") {
+        setError(result.message);
+        return;
+      }
+
+      setSweep(result.data);
     });
   }, []);
 

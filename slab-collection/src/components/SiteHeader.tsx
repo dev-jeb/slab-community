@@ -26,23 +26,6 @@ const links = [
   { href: "/news", label: "Alerts", showBadge: true },
 ];
 
-export const pageTitles: Record<string, string> = {
-  "/": "My Collection",
-  "/search": "Search",
-  "/market": "Market",
-  "/chase": "Chase Sets",
-  "/news": "Alerts",
-};
-
-export function pageTitleForPath(pathname: string): string {
-  if (pathname.startsWith("/cards/")) return "Card detail";
-  if (pathname.startsWith("/search")) return "Search";
-  if (pathname.startsWith("/market")) return "Market";
-  if (pathname.startsWith("/players")) return "Player pricing";
-  if (pathname.startsWith("/chase")) return "Chase Sets";
-  return pageTitles[pathname] ?? "Slab Collection";
-}
-
 function linkActive(pathname: string, href: string): boolean {
   if (href === "/") return pathname === "/";
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -64,11 +47,9 @@ export function SiteHeader() {
             Slab
           </Link>
           <h1
-            className={`truncate text-base font-semibold text-white ${
-              inNav ? "md:hidden" : ""
-            }`}
+            className={`truncate text-base font-semibold text-white ${inNav ? "md:hidden" : ""
+              }`}
           >
-            {pageTitleForPath(pathname)}
           </h1>
         </div>
 
@@ -82,11 +63,10 @@ export function SiteHeader() {
                 key={link.href}
                 href={link.href}
                 aria-current={active ? "page" : undefined}
-                className={`pressable inline-flex items-center gap-1.5 border-b-2 px-1 pb-0.5 text-sm ${
-                  active
-                    ? "border-[#f0b429] text-[#f0b429]"
-                    : "border-transparent text-[#7a8baa] hover:text-[#f0b429]"
-                }`}
+                className={`pressable inline-flex items-center gap-1.5 border-b-2 px-1 pb-0.5 text-sm ${active
+                  ? "border-[#f0b429] text-[#f0b429]"
+                  : "border-transparent text-[#7a8baa] hover:text-[#f0b429]"
+                  }`}
               >
                 {/* The underline can't move until the new route renders — it's driven by
                     `pathname`. So while the navigation is in flight the label itself takes the

@@ -1,4 +1,4 @@
-import { compareLastName, primarySubjectName } from "@/lib/names";
+import { primarySubjectName } from "@/lib/names";
 import type { CardCopyOut, CardOut } from "@/lib/slab/types";
 
 /**
@@ -21,16 +21,6 @@ export type CollectionBrowseMode =
 /** What NARROWS it. Applies inside every browse mode. */
 export type CollectionFilter = "all" | "auto" | "rookie" | "numbered";
 
-/** @deprecated The fused enum. Kept only for helpers that still take it. */
-export type CollectionCategoryFilter =
-  | "all"
-  | "auto"
-  | "rookie"
-  | "numbered"
-  | "teams"
-  | "by_set"
-  | "duplicates";
-
 export function copyTeams(copy: CardCopyOut): string[] {
   const teams =
     copy.card?.subjects
@@ -39,28 +29,6 @@ export function copyTeams(copy: CardCopyOut): string[] {
 
   return [...new Set(teams)];
 }
-
-export function copyHasTeam(copy: CardCopyOut): boolean {
-  return copyTeams(copy).length > 0;
-}
-
-export function groupByTeam(
-  items: CardCopyOut[],
-): { team: string; copies: CardCopyOut[] }[] {
-  const groups = new Map<string, CardCopyOut[]>();
-
-  for (const copy of items) {
-    for (const team of copyTeams(copy)) {
-      const current = groups.get(team) ?? [];
-      current.push(copy);
-      groups.set(team, current);
-    }
-  }
-
-  return [...groups.entries()].map(([team, copies]) => ({ team, copies }));
-}
-
-export type TeamGroupSort = "players_desc" | "cards_desc" | "alpha";
 
 export function countUniqueTeamPlayers(
   copies: CardCopyOut[],
@@ -79,44 +47,8 @@ export function countUniqueTeamPlayers(
   return names.size;
 }
 
-export interface TeamGroup {
-  team: string;
-  copies: CardCopyOut[];
-  playerCount: number;
-}
-
-export function sortTeamGroups(
-  groups: { team: string; copies: CardCopyOut[] }[],
-  sort: TeamGroupSort,
-): TeamGroup[] {
-  const withCounts = groups.map((group) => ({
-    ...group,
-    playerCount: countUniqueTeamPlayers(group.copies, group.team),
-  }));
-
-  return withCounts.sort((a, b) => {
-    if (sort === "players_desc") {
-      if (b.playerCount !== a.playerCount) return b.playerCount - a.playerCount;
-      return a.team.localeCompare(b.team);
-    }
-
-    if (sort === "cards_desc") {
-      if (b.copies.length !== a.copies.length) {
-        return b.copies.length - a.copies.length;
-      }
-      return a.team.localeCompare(b.team);
-    }
-
-    return a.team.localeCompare(b.team);
-  });
-}
-
-export function copySetName(copy: CardCopyOut): string {
+function copySetName(copy: CardCopyOut): string {
   return copy.card?.set_name?.trim() || "Unknown set";
-}
-
-export function copyHasSet(copy: CardCopyOut): boolean {
-  return Boolean(copy.card?.set_name?.trim());
 }
 
 export function groupBySet(
@@ -134,7 +66,7 @@ export function groupBySet(
   return [...groups.entries()].map(([setName, copies]) => ({ setName, copies }));
 }
 
-export function setGroupValue(copies: CardCopyOut[]): number {
+function setGroupValue(copies: CardCopyOut[]): number {
   return copies.reduce(
     (sum, copy) => sum + Number(copy.market?.fair_market_value ?? 0),
     0,
@@ -184,19 +116,6 @@ export function sortSetGroups(
   });
 }
 
-export function filterByCategory(
-  items: CardCopyOut[],
-  category: CollectionCategoryFilter,
-): CardCopyOut[] {
-  if (category === "teams") {
-    return items.filter(copyHasTeam);
-  }
-  if (category === "by_set") {
-    return items.filter(copyHasSet);
-  }
-  return items;
-}
-
 /** The API filter params a filter selection stands for. Applies to card and grouped requests alike. */
 export function categoryQueryParams(
   category: CollectionFilter,
@@ -213,11 +132,7 @@ export function categoryQueryParams(
   }
 }
 
-export function categoryFetchLimit(_category: CollectionCategoryFilter): number {
-  return 100;
-}
-
-export function countCopyQuantity(copies: CardCopyOut[]): number {
+function countCopyQuantity(copies: CardCopyOut[]): number {
   return copies.reduce((sum, copy) => sum + Math.max(copy.quantity, 1), 0);
 }
 
@@ -256,12 +171,8 @@ export function duplicateGroupsOnly(groups: DuplicateGroup[]): DuplicateGroup[] 
   );
 }
 
-export function countDuplicateCards(items: CardCopyOut[]): number {
-  return duplicateGroupsOnly(groupByCardUuid(items)).length;
-}
-
 /** A parallel is a catalog variant: it has a parent (base) card, or a named finish. */
-export function copyIsParallel(copy: CardCopyOut): boolean {
+function copyIsParallel(copy: CardCopyOut): boolean {
   const card = copy.card;
   if (!card) return false;
   return Boolean(card.parent_card_uuid?.trim()) || Boolean(card.finish?.trim());
@@ -364,10 +275,6 @@ export function parallelGroupsOnly(groups: ParallelGroup[]): ParallelGroup[] {
   return groups.filter((group) => group.copies.some(copyIsParallel));
 }
 
-export function countParallelGroups(items: CardCopyOut[]): number {
-  return parallelGroupsOnly(groupByParallelFamily(items)).length;
-}
-
 export function ownedCountByCardUuid(items: CardCopyOut[]): Map<string, number> {
   const counts = new Map<string, number>();
 
@@ -376,30 +283,4 @@ export function ownedCountByCardUuid(items: CardCopyOut[]): Map<string, number> 
   }
 
   return counts;
-}
-
-export type DuplicateGroupSort = "copies_desc" | "value_desc" | "alpha";
-
-export function sortDuplicateGroups(
-  groups: DuplicateGroup[],
-  sort: DuplicateGroupSort,
-): DuplicateGroup[] {
-  return [...groups].sort((a, b) => {
-    if (sort === "copies_desc") {
-      if (b.totalCount !== a.totalCount) return b.totalCount - a.totalCount;
-      return b.totalValue - a.totalValue;
-    }
-
-    if (sort === "value_desc") {
-      if (b.totalValue !== a.totalValue) return b.totalValue - a.totalValue;
-      return b.totalCount - a.totalCount;
-    }
-
-    const nameCompare = compareLastName(
-      primarySubjectName(a.card?.subjects),
-      primarySubjectName(b.card?.subjects),
-    );
-    if (nameCompare !== 0) return nameCompare;
-    return (a.card?.set_name ?? "").localeCompare(b.card?.set_name ?? "");
-  });
 }

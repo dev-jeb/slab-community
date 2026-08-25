@@ -22,6 +22,7 @@ import {
   loadSetsSnapshot,
 } from "@/lib/slab-news-snapshot";
 import type { SetOut } from "@/lib/slab/types";
+import { fetchJson } from "@/lib/slab/fetch-json";
 
 const SORT_OPTIONS: { value: SetLookupSort; label: string }[] = [
   { value: "release_desc", label: "Newest release" },
@@ -62,21 +63,23 @@ export function SetLookupView() {
     startTransition(async () => {
       setError(null);
 
-      const response = await fetch("/api/sets");
+      const result = await fetchJson<{ sets: SetOut[] }>(
+        "/api/sets",
+        undefined,
+        "Failed to load sets",
+      );
 
-      if (response.status === 503) {
+      if (result.status === "setup") {
         setNeedsSetup(true);
         return;
       }
 
-      if (!response.ok) {
-        const body = (await response.json()) as { detail?: string };
-        setError(body.detail ?? "Failed to load sets");
+      if (result.status === "error") {
+        setError(result.message);
         return;
       }
 
-      const data = (await response.json()) as { sets: SetOut[] };
-      setSets(data.sets);
+      setSets(result.data.sets);
     });
   }, []);
 

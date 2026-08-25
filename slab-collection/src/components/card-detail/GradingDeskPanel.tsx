@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { LiquidityPace } from "@/components/card-detail/LiquidityPace";
 import { formatCurrency, formatSignedCurrency } from "@/lib/slab/format";
 import type { BreakEvenRegion, GradingDesk, MetricInfo } from "@/lib/slab/types";
+import { failureMessage, fetchJson } from "@/lib/slab/fetch-json";
 
 /**
  * The grading math — the per-card grading desk (GET /cards/{uuid}/grading-desk).
@@ -27,17 +28,17 @@ export function GradingDeskPanel({ cardUuid }: { cardUuid: string }) {
   const load = useCallback((fee: string) => {
     startTransition(async () => {
       setError(null);
-      try {
-        const params = fee ? `?fee=${encodeURIComponent(fee)}` : "";
-        const response = await fetch(`/api/cards/${cardUuid}/grading${params}`);
-        const body = await response.json();
-        if (!response.ok) {
-          throw new Error(typeof body?.detail === "string" ? body.detail : "Request failed");
-        }
-        setDesk(body as GradingDesk);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Request failed");
+      const params = fee ? `?fee=${encodeURIComponent(fee)}` : "";
+      const result = await fetchJson<GradingDesk>(`/api/cards/${cardUuid}/grading${params}`);
+
+      // No setup branch: this panel sits inside a card page that already showed the prompt if the
+      // app is unconfigured, so an unreachable desk is just a quiet note here.
+      if (result.status !== "ok") {
+        setError(failureMessage(result));
+        return;
       }
+
+      setDesk(result.data);
     });
   }, [cardUuid]);
 

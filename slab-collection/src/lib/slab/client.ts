@@ -1,4 +1,5 @@
 import { requireSlabConfig } from "./config";
+import { SlabApiError } from "./errors";
 import { formatApiDetail } from "@/lib/api-errors";
 import type {
   CardComps,
@@ -35,22 +36,17 @@ import type {
   SetOut,
   SetSearchQuery,
   SetSearchResult,
-  SlabError,
 } from "./types";
 
-class SlabApiError extends Error {
-  status: number;
-
-  constructor(message: string, status: number) {
-    super(message);
-    this.status = status;
-  }
-}
-
-async function slabFetch<T>(
-  path: string,
-  init?: RequestInit,
-): Promise<T> {
+/**
+ * One authenticated call to Slab: key header, no caching, non-2xx raised as {@link SlabApiError}.
+ * Every function below goes through here.
+ *
+ * The two wrappers under it are the only thing that ever differed — whether the caller wants a
+ * parsed body or just the success. They used to be two full copies of this function, identical
+ * apart from the last line.
+ */
+async function slabRequest(path: string, init?: RequestInit): Promise<Response> {
   const { apiKey, apiUrl } = requireSlabConfig();
 
   const response = await fetch(`${apiUrl}${path}`, {
@@ -74,32 +70,16 @@ async function slabFetch<T>(
     throw new SlabApiError(detail, response.status);
   }
 
+  return response;
+}
+
+async function slabFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await slabRequest(path, init);
   return response.json() as Promise<T>;
 }
 
 async function slabFetchVoid(path: string, init?: RequestInit): Promise<void> {
-  const { apiKey, apiUrl } = requireSlabConfig();
-
-  const response = await fetch(`${apiUrl}${path}`, {
-    ...init,
-    headers: {
-      "x-api-key": apiKey,
-      "content-type": "application/json",
-      ...init?.headers,
-    },
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    let detail = response.statusText;
-    try {
-      const body = (await response.json()) as { detail?: unknown };
-      detail = formatApiDetail(body.detail, detail);
-    } catch {
-      // ignore parse errors
-    }
-    throw new SlabApiError(detail, response.status);
-  }
+  await slabRequest(path, init);
 }
 
 let cachedCollectorUuid: string | null = null;
@@ -563,7 +543,10 @@ export async function fetchAllCollection(): Promise<CardCopyOut[]> {
 export async function fetchCollection(
   query: CollectionSearchQuery = {},
 ): Promise<CollectionResult> {
-  const { limit: _limit, offset: _offset, ...filters } = query;
+  // Paging is this function's job, so a caller's limit/offset would fight it — dropped, not honored.
+  const filters: CollectionSearchQuery = { ...query };
+  delete filters.limit;
+  delete filters.offset;
 
   // The first page tells us the total, which is what lets the rest go out together. Paging
   // serially meant every page waited on the one before it, so a large collection cost the sum of
@@ -613,5 +596,3 @@ export async function getLifecycleCurve(
 ): Promise<LifecycleCurve> {
   return slabFetch<LifecycleCurve>(`/market/lifecycle?universe=${universe}`);
 }
-
-export { SlabApiError };

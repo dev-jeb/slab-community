@@ -1,15 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { getGradingDesk, SlabApiError, type GradingDeskQuery } from "@/lib/slab/client";
-
-function handleError(error: unknown) {
-  if (error instanceof SlabApiError) {
-    return NextResponse.json({ detail: error.message }, { status: error.status });
-  }
-  const message = error instanceof Error ? error.message : "Request failed";
-  const status = message.includes("SLAB_API_KEY") ? 503 : 500;
-  return NextResponse.json({ detail: message }, { status });
-}
+import { getGradingDesk, type GradingDeskQuery } from "@/lib/slab/client";
+import { slabErrorResponse } from "@/lib/api-response";
 
 /** Pull the optional fee/company overrides out of the query string, rejecting garbage fees
  *  loudly rather than silently pricing the desk off the default. */
@@ -41,6 +33,6 @@ export async function GET(
     if (query instanceof NextResponse) return query;
     return NextResponse.json(await getGradingDesk(cardUuid, query));
   } catch (error) {
-    return handleError(error);
+    return slabErrorResponse(error);
   }
 }

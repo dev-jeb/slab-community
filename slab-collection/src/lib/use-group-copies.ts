@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { COLLECTION_PAGE_SIZE } from "@/lib/collection-paging";
 import type { CardCopyOut, CollectionResult } from "@/lib/slab/types";
+import { fetchJson } from "@/lib/slab/fetch-json";
 
 /**
  * Fetch a single group's copies, on expand.
@@ -25,12 +26,12 @@ import type { CardCopyOut, CollectionResult } from "@/lib/slab/types";
  * than the same filter at 48.
  */
 async function fetchGroupCopies(filterQuery: string): Promise<CardCopyOut[]> {
-  const firstResponse = await fetch(
+  const firstResult = await fetchJson<CollectionResult>(
     `/api/collection?limit=${COLLECTION_PAGE_SIZE}&offset=0&${filterQuery}`,
   );
-  if (!firstResponse.ok) return [];
+  if (firstResult.status !== "ok") return [];
 
-  const first = (await firstResponse.json()) as CollectionResult;
+  const first = firstResult.data;
   const copies: CardCopyOut[] = [...(first.items ?? [])];
   const total = first.total ?? copies.length;
 
@@ -47,12 +48,11 @@ async function fetchGroupCopies(filterQuery: string): Promise<CardCopyOut[]> {
 
   const pages = await Promise.all(
     offsets.map(async (offset) => {
-      const response = await fetch(
+      const result = await fetchJson<CollectionResult>(
         `/api/collection?limit=${COLLECTION_PAGE_SIZE}&offset=${offset}&${filterQuery}`,
       );
-      if (!response.ok) return [] as CardCopyOut[];
-      const page = (await response.json()) as CollectionResult;
-      return page.items ?? [];
+      if (result.status !== "ok") return [] as CardCopyOut[];
+      return result.data.items ?? [];
     }),
   );
 
@@ -113,10 +113,14 @@ export function useSetPricedShares(slugs: string[]): Record<string, number | nul
   const slugKey = slugs.filter(Boolean).join("|");
 
   useEffect(() => {
-    const missing = slugKey ? slugKey.split("|").filter((slug) => !seen.current.has(slug)) : [];
+    // Read the ref once, into a local the cleanup closes over. The set is created on first render
+    // and never replaced, so this is the same object either way — but the effect and its cleanup
+    // are now provably talking about the same one, which is what the hooks rule is asking for.
+    const inFlight = seen.current;
+    const missing = slugKey ? slugKey.split("|").filter((slug) => !inFlight.has(slug)) : [];
     if (!missing.length) return;
 
-    for (const slug of missing) seen.current.add(slug);
+    for (const slug of missing) inFlight.add(slug);
     let cancelled = false;
 
     void (async () => {
@@ -124,19 +128,14 @@ export function useSetPricedShares(slugs: string[]): Record<string, number | nul
         const chunk = missing.slice(i, i + PRICED_SHARE_CONCURRENCY);
         const entries = await Promise.all(
           chunk.map(async (slug) => {
-            try {
-              const response = await fetch(
-                `/api/collection?limit=1&offset=0&set_slug=${encodeURIComponent(slug)}`,
-              );
-              if (!response.ok) return [slug, null] as const;
-              const data = (await response.json()) as CollectionResult;
-              const priced = data.summary?.priced_copies;
-              const total = data.total ?? 0;
-              if (priced == null || total <= 0) return [slug, null] as const;
-              return [slug, priced / total] as const;
-            } catch {
-              return [slug, null] as const;
-            }
+            const result = await fetchJson<CollectionResult>(
+              `/api/collection?limit=1&offset=0&set_slug=${encodeURIComponent(slug)}`,
+            );
+            if (result.status !== "ok") return [slug, null] as const;
+            const priced = result.data.summary?.priced_copies;
+            const total = result.data.total ?? 0;
+            if (priced == null || total <= 0) return [slug, null] as const;
+            return [slug, priced / total] as const;
           }),
         );
         if (cancelled) return;
@@ -146,7 +145,7 @@ export function useSetPricedShares(slugs: string[]): Record<string, number | nul
 
     return () => {
       cancelled = true;
-      for (const slug of missing) seen.current.delete(slug);
+      for (const slug of missing) inFlight.delete(slug);
     };
   }, [slugKey]);
 

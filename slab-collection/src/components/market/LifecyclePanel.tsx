@@ -16,6 +16,7 @@ import type {
   LifecycleUniverse,
   MetricInfo,
 } from "@/lib/slab/types";
+import { fetchJson } from "@/lib/slab/fetch-json";
 
 /**
  * One lifecycle benchmark — a universe's curve — as one section: its name, one sentence saying
@@ -64,32 +65,33 @@ export function LifecyclePanel({
   // app's views load — an effect body that setStates synchronously cascades renders.
   const load = useCallback(() => {
     startTransition(async () => {
-      const response = await fetch(`/api/market/lifecycle?universe=${universe}`);
+      const result = await fetchJson<LifecycleCurve>(
+        `/api/market/lifecycle?universe=${universe}`,
+        undefined,
+        "Failed to load the benchmark",
+      );
 
       // No API key configured — the whole app's answer to that, not this panel's.
-      if (response.status === 503) {
+      if (result.status === "setup") {
         setNeedsSetup(true);
         return;
       }
 
-      const body = (await response.json()) as LifecycleCurve | { detail?: string };
-
-      // 404 is an answer, not a failure: no build has been published. Say that plainly rather
-      // than showing an error, and never draw an empty curve to avoid the empty state.
-      if (response.status === 404) {
-        setUnbuilt(("detail" in body && body.detail) || "No lifecycle build published yet.");
-        return;
-      }
-
-      if (!response.ok) {
-        setError(("detail" in body && body.detail) || "Failed to load the benchmark");
+      if (result.status === "error") {
+        // 404 is an answer, not a failure: no build has been published. Say that plainly rather
+        // than showing an error, and never draw an empty curve to avoid the empty state.
+        if (result.httpStatus === 404) {
+          setUnbuilt(result.message || "No lifecycle build published yet.");
+        } else {
+          setError(result.message);
+        }
         return;
       }
 
       // An API build from before this universe existed ignores the query param and answers with
       // the default curve. Showing card ageing under a "hobby boxes" heading would be worse than
       // showing nothing, so an answer about the wrong pool counts as no answer.
-      const served = body as LifecycleCurve;
+      const served = result.data;
       if ((served.universe ?? "raw_cards") !== universe) {
         setUnbuilt("This API build doesn't serve that benchmark yet.");
         return;

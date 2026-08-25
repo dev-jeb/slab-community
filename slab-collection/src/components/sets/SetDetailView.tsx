@@ -18,6 +18,7 @@ import type {
   SealedPriceHistory,
   SealedProductOut,
 } from "@/lib/slab/types";
+import { fetchJson } from "@/lib/slab/fetch-json";
 
 type Face = "history" | "sales" | "cards";
 
@@ -47,23 +48,25 @@ export function SetDetailView({ setUuid }: { setUuid: string }) {
 
   const load = useCallback(() => {
     startTransition(async () => {
-      const response = await fetch(`/api/sets/${setUuid}`);
+      const result = await fetchJson<SetDetailResult>(
+        `/api/sets/${setUuid}`,
+        undefined,
+        "Failed to load this product",
+      );
 
-      if (response.status === 503) {
+      if (result.status === "setup") {
         setNeedsSetup(true);
         return;
       }
 
-      if (!response.ok) {
-        const body = (await response.json()) as { detail?: string };
-        setError(body.detail ?? "Failed to load this product");
+      if (result.status === "error") {
+        setError(result.message);
         return;
       }
 
-      const data = (await response.json()) as SetDetailResult;
-      setDetail(data);
+      setDetail(result.data);
       // Open on the SKU the list is sorted to lead with — the priced hobby box, when there is one.
-      setProductUuid(data.sealed[0]?.uuid ?? null);
+      setProductUuid(result.data.sealed[0]?.uuid ?? null);
     });
   }, [setUuid]);
 
@@ -77,17 +80,14 @@ export function SetDetailView({ setUuid }: { setUuid: string }) {
     if (!productUuid) return;
 
     startSkuTransition(async () => {
-      const [historyResponse, marketResponse] = await Promise.all([
-        fetch(`/api/sealed/${productUuid}/history`),
-        fetch(`/api/sealed/${productUuid}/market`),
+      const [historyResult, marketResult] = await Promise.all([
+        fetchJson<SealedPriceHistory>(`/api/sealed/${productUuid}/history`),
+        fetchJson<SealedMarket>(`/api/sealed/${productUuid}/market`),
       ]);
 
-      if (historyResponse.ok) {
-        setHistory((await historyResponse.json()) as SealedPriceHistory);
-      }
-      if (marketResponse.ok) {
-        setMarket((await marketResponse.json()) as SealedMarket);
-      }
+      // Either half missing leaves that panel empty; the set above it is already on screen.
+      if (historyResult.status === "ok") setHistory(historyResult.data);
+      if (marketResult.status === "ok") setMarket(marketResult.data);
     });
   }, [productUuid]);
 

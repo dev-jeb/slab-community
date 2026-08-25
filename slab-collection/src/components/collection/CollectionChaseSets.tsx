@@ -23,12 +23,8 @@ import {
 } from "@/lib/chase-set-view";
 import { cardSubtitle, cardTitle, formatCurrency } from "@/lib/slab/format";
 import type { CustomSetDetail, CustomSetOut } from "@/lib/slab/types";
-
-function completionTone(pct: number): string {
-  if (pct >= 100) return "text-emerald-400";
-  if (pct >= 50) return "text-sky-300";
-  return "text-slate-300";
-}
+import { CompletionMeter } from "@/components/ui/CompletionMeter";
+import { failureMessage, fetchJson } from "@/lib/slab/fetch-json";
 
 function ChaseSetBanner({
   set,
@@ -93,13 +89,16 @@ function ChaseSetDetailPanel({
   useEffect(() => {
     startTransition(async () => {
       setError(null);
-      const response = await fetch(`/api/chase/${setUuid}`);
-      if (!response.ok) {
-        const body = (await response.json()) as { detail?: string };
-        setError(body.detail ?? "Failed to load set");
+      const result = await fetchJson<CustomSetDetail>(
+        `/api/chase/${setUuid}`,
+        undefined,
+        "Failed to load set",
+      );
+      if (result.status !== "ok") {
+        setError(failureMessage(result));
         return;
       }
-      const data = (await response.json()) as CustomSetDetail;
+      const data = result.data;
       setDetail(data);
       setViewMode(defaultChaseViewMode(data.cards.length));
       // List `card_count` is 0 for dynamic sets; completion covers the full membership.
@@ -161,31 +160,19 @@ function ChaseSetDetailPanel({
   return (
     <div className="space-y-4 rounded-xl border border-slate-800 bg-slate-900/40 p-4">
       {completion ? (
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-[11px] uppercase tracking-wider text-slate-500">
-              Card slots
+        <CompletionMeter
+          label="Card slots"
+          pct={completion.completion_pct}
+          ownedCards={completion.owned_cards}
+          totalCards={completion.total_cards}
+        >
+          {playerCompletion && playerCompletion.totalPlayers > 0 ? (
+            <p className="mt-1 text-sm text-slate-500">
+              {playerCompletion.ownedPlayers} of {playerCompletion.totalPlayers}{" "}
+              players ({playerCompletion.pct.toFixed(1)}%)
             </p>
-            <p className={`text-3xl font-semibold ${completionTone(completion.completion_pct)}`}>
-              {completion.completion_pct.toFixed(1)}%
-            </p>
-            <p className="mt-1 text-sm text-slate-400">
-              {completion.owned_cards} of {completion.total_cards} slots owned
-            </p>
-            {playerCompletion && playerCompletion.totalPlayers > 0 ? (
-              <p className="mt-1 text-sm text-slate-500">
-                {playerCompletion.ownedPlayers} of {playerCompletion.totalPlayers}{" "}
-                players ({playerCompletion.pct.toFixed(1)}%)
-              </p>
-            ) : null}
-          </div>
-          <div className="h-2 w-full max-w-xs overflow-hidden rounded-full bg-slate-800 sm:w-48">
-            <div
-              className="h-full rounded-full bg-sky-500 transition-all"
-              style={{ width: `${Math.min(completion.completion_pct, 100)}%` }}
-            />
-          </div>
-        </div>
+          ) : null}
+        </CompletionMeter>
       ) : null}
 
       {detail.cards.length > 0 ? (
@@ -523,17 +510,19 @@ export function CollectionChaseSets({
   function loadSets() {
     startTransition(async () => {
       setError(null);
-      const response = await fetch("/api/chase");
-      if (!response.ok) {
-        const body = (await response.json()) as { detail?: string };
-        setError(body.detail ?? "Failed to load chase sets");
+      const result = await fetchJson<{ sets: CustomSetOut[] }>(
+        "/api/chase",
+        undefined,
+        "Failed to load chase sets",
+      );
+      if (result.status !== "ok") {
+        setError(failureMessage(result));
         return;
       }
-      const data = (await response.json()) as { sets: CustomSetOut[] };
-      setSets(data.sets);
+      setSets(result.data.sets);
       setSlotCounts((current) => {
         const next = { ...current };
-        for (const set of data.sets) {
+        for (const set of result.data.sets) {
           if (set.card_count > 0) next[set.uuid] = set.card_count;
         }
         return next;

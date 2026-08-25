@@ -1,18 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { fetchCollection, searchCollection, SlabApiError } from "@/lib/slab/client";
+import { fetchCollection, searchCollection } from "@/lib/slab/client";
 import type { CollectionSearchQuery } from "@/lib/slab/types";
-
-function handleError(error: unknown) {
-  if (error instanceof SlabApiError) {
-    return NextResponse.json({ detail: error.message }, { status: error.status });
-  }
-
-  const message =
-    error instanceof Error ? error.message : "Failed to load collection";
-  const status = message.includes("SLAB_API_KEY") ? 503 : 500;
-  return NextResponse.json({ detail: message }, { status });
-}
+import { slabErrorResponse } from "@/lib/api-response";
 
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
@@ -40,7 +30,7 @@ export async function GET(request: NextRequest) {
       : await searchCollection(query);
     return NextResponse.json(result);
   } catch (error) {
-    return handleError(error);
+    return slabErrorResponse(error, "Failed to load collection");
   }
 }
 
@@ -50,6 +40,6 @@ export async function POST(request: NextRequest) {
     const result = await searchCollection(body);
     return NextResponse.json(result);
   } catch (error) {
-    return handleError(error);
+    return slabErrorResponse(error, "Failed to load collection");
   }
 }
