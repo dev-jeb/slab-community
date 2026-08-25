@@ -65,7 +65,7 @@ export function CopySaleActions({ copy, onUpdated }: CopySaleActionsProps) {
           {formatCurrency(copy.sale_price)}
           {copy.sold_date ? ` · ${copy.sold_date}` : ""}
         </span>
-        <Link href="/sales" className="text-sky-400 hover:text-sky-300">
+        <Link href="/?view=sales" className="text-sky-400 hover:text-sky-300">
           View in Sales →
         </Link>
       </div>
@@ -89,7 +89,7 @@ export function CopySaleActions({ copy, onUpdated }: CopySaleActionsProps) {
           {listing.notes ? (
             <span className="text-slate-400">{listing.notes}</span>
           ) : null}
-          <Link href="/sales" className="text-sky-400 hover:text-sky-300">
+          <Link href="/?view=sales" className="text-sky-400 hover:text-sky-300">
             Manage on Sales →
           </Link>
         </div>

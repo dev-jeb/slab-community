@@ -1,10 +1,14 @@
 /**
- * Quiet per-set color, so a mixed collection still clusters by product.
+ * Quiet per-set color, so a shelf of mixed products still clusters by set.
  *
  * The site is navy with foil-gold chrome, sky for actions, emerald/rose for money. Accents
  * here stay off those jobs: same lightness, different hue, low alpha, used as a thin bottom
  * edge rather than a fill. The pick is a hash of `set_slug`, so OPC Platinum is the same violet
- * on a card tile and on its Sets banner.
+ * wherever it appears.
+ *
+ * Only on rows that ARE a set — the set banners, the top-sets list. It used to run along the
+ * bottom of every card row too, which put a different color under every line of a search result
+ * and gave the reader nothing to do with any of them: the set is already written in the subtitle.
  */
 
 interface AccentHue {
@@ -48,12 +52,6 @@ function hashKey(key: string): number {
 
 function hsl({ h, s, l }: AccentHue, alpha: number): string {
   return `hsl(${h} ${s}% ${l}% / ${alpha})`;
-}
-
-export function setAccentKey(
-  source?: { set_slug?: string | null; set_name?: string | null } | null,
-): string {
-  return source?.set_slug?.trim() || source?.set_name?.trim() || "";
 }
 
 export function setAccent(key?: string | null): SetAccent {

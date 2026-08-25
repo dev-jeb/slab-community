@@ -217,7 +217,10 @@ export interface SetOut {
   name?: string | null;
   brand?: string | null;
   season?: string | null;
+  /** The SEASON, not the release year: 2025 for a 2025-26 product. */
   year?: number | null;
+  /** ISO date the product hit shelves. Null until the set's overview has been ingested. */
+  release_date?: string | null;
   sport?: string | null;
   card_count?: number | null;
   priced_count?: number | null;
@@ -245,14 +248,70 @@ export interface SealedProductOut {
   uuid: string;
   set_uuid: string;
   set_name?: string | null;
+  /** hobby_box | hobby_case | blaster_box | … — a `SealedFormat` on the wire. */
   format: string;
   cards_per_pack?: number | null;
   packs_per_box?: number | null;
   boxes_per_case?: number | null;
   msrp?: string | null;
   price_median?: string | null;
+  as_of_date?: string | null;
   sample_size?: number | null;
   low_confidence?: boolean | null;
+}
+
+/** One day of a sealed SKU's price series — same shape as a card's, keyed by product. */
+export interface SealedPricePoint {
+  date: string;
+  price_median: string;
+  price_low?: string | null;
+  price_high?: string | null;
+  sample_size?: number;
+  low_confidence?: boolean;
+}
+
+export interface SealedPriceHistory {
+  product_uuid: string;
+  set_name?: string | null;
+  format: string;
+  start_date: string;
+  end_date: string;
+  interval: string;
+  points: SealedPricePoint[];
+}
+
+/**
+ * A sealed SKU's market: its snapshot price points and the sales behind them.
+ *
+ * Sealed has no grade or finish axis — v1 prices factory-sealed only — so a comp here carries a
+ * date, a price, a marketplace and its listing title, and nothing about condition.
+ */
+export interface SealedMarket {
+  product: SealedProductOut;
+  as_of_date?: string | null;
+  price_points: PricePointOut[];
+  total_comps: number;
+  comps: CompOut[];
+}
+
+/** A set's most expensive printings by headline FMV. */
+export interface TopCardOut {
+  card_uuid: string;
+  card_number: string;
+  subjects: string[];
+  subset?: string | null;
+  finish?: string | null;
+  print_run?: number | null;
+  /** Headline FMV for the printing — the same `FmvSummary` a card search returns. */
+  market?: FmvSummary | null;
+}
+
+export interface SetTopCards {
+  set_uuid: string;
+  set_name?: string | null;
+  season?: string | null;
+  total_priced?: number | null;
+  cards: TopCardOut[];
 }
 
 /** A value and how many results carry it, within the current filter set. */
@@ -654,4 +713,51 @@ export interface CustomSetCardAdd {
   subject_team?: string | null;
   subject_attribute?: string | null;
   position?: number;
+}
+
+/* --- Market analytics -------------------------------------------------------
+   Catalog-level benchmarks derived from real sales. Descriptive, never prescriptive: the API
+   hands over the measured shape of the market plus the evidence counts behind every number, and
+   says nothing about what to buy, sell, rip, or grade. `GET /market/lifecycle` is the first. */
+
+/** One age-month of the lifecycle benchmark. */
+export interface LifecyclePoint {
+  /** Whole months since the card's set released; 0 = release day. */
+  age_months: number;
+  /** Index level at this age; 100 = release-day price by construction. */
+  level: number;
+  /** Percent the typical card moves in this month of life (0 at age 0). */
+  monthly_move: number;
+  /** Same-card month-over-month comparisons behind this age — the evidence count. */
+  pairs: number;
+}
+
+/**
+ * The average price path a raw card follows as it ages.
+ *
+ * `points` covers ONLY the estimated region (age 0 through `estimated_through_month`); past that
+ * the benchmark holds flat at `clamp_level` and the API deliberately ships no points, because the
+ * data out there can't tell flat from noise. Don't invent them on the client either.
+ */
+/** What a lifecycle curve is a benchmark OF. Each runs the same recipe over a different pool. */
+export type LifecycleUniverse = "raw_cards" | "hobby_boxes";
+
+export interface LifecycleCurve {
+  /** This build's identity — quote it and the numbers are reproducible. */
+  uuid: string;
+  /** Which pool this curve benchmarks. Absent on API builds before the sealed universe landed. */
+  universe?: LifecycleUniverse;
+  /** When this build ran; the curve is frozen until the next one. */
+  computed_dt: string;
+  data_from: string;
+  data_through: string;
+  comp_count: number;
+  estimated_through_month: number;
+  clamp_level: number;
+  min_bin_pairs: number;
+  max_bin_months: number;
+  method: string;
+  points: LifecyclePoint[];
+  /** The `market.*` glossary — render THIS text rather than writing our own definitions. */
+  glossary?: Record<string, MetricInfo>;
 }

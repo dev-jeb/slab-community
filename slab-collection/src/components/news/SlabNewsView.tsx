@@ -97,7 +97,7 @@ function CompAlertRow({ alert }: { alert: CompAlert }) {
   return (
     <Link
       href={`/cards/${alert.cardUuid}`}
-      className="block rounded-xl border border-slate-800/80 bg-slate-950/30 px-4 py-4 transition hover:border-slate-700 hover:bg-slate-950/50"
+      className="pressable block rounded-xl border border-slate-800/80 bg-slate-950/30 px-4 py-4 hover:border-slate-700 hover:bg-slate-950/50"
     >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>

@@ -13,8 +13,6 @@ import {
 } from "@/lib/slab/format";
 import { PriceConfidenceBadge } from "@/components/collection/PriceConfidenceBadge";
 import { PlayerAvatar, primarySubjectName } from "@/components/collection/PlayerAvatar";
-import { SetAccentBar } from "@/components/collection/SetAccentBar";
-import { setAccentKey } from "@/lib/set-accent";
 
 interface CardListRowProps {
   row: CardRow;
@@ -29,6 +27,11 @@ interface CardListRowProps {
  * The last three columns are the ones that change. A copy reports serial / market / cost basis /
  * unrealized; a catalog printing reports print run / market / whether you own one — because
  * "do I have this?" is the question you're asking when the table is pointed at the whole catalog.
+ *
+ * No set-accent bar along the bottom edge. It still marks a SET — on the set banners and the
+ * top-sets rows, where the row IS a product and the color is its identity — but on a card row the
+ * product is already named in the subtitle, so the stripe only added a color per row with nothing
+ * for the reader to do with it.
  */
 export function CardListRow({
   row,
@@ -41,7 +44,6 @@ export function CardListRow({
   const checklist = setChecklistNumber(card);
   const ownedSerial = copy ? ownedSerialLabel(copy) : null;
   const owned = row.ownedCount ?? 0;
-  const accentKey = setAccentKey(card);
 
   const ownedBadge =
     owned > 1 || (!copy && owned > 0) ? (
@@ -54,9 +56,8 @@ export function CardListRow({
     return (
       <Link
         href={`/cards/${row.cardUuid}`}
-        className="group relative flex items-center gap-3 overflow-hidden rounded-xl border border-slate-800 bg-slate-900/50 p-3 transition hover:border-sky-500/40 hover:bg-slate-900/70"
+        className="pressable group flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/50 p-3 hover:border-sky-500/40 hover:bg-slate-900/70"
       >
-        <SetAccentBar accentKey={accentKey} />
         <PlayerAvatar name={playerName} size="sm" />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -96,9 +97,8 @@ export function CardListRow({
   return (
     <Link
       href={`/cards/${row.cardUuid}`}
-      className="group relative grid gap-3 overflow-hidden rounded-xl border border-slate-800 bg-slate-900/50 p-4 transition hover:border-sky-500/40 hover:bg-slate-900/70 lg:grid-cols-[auto_minmax(0,2fr)_repeat(5,minmax(0,1fr))] lg:items-center"
+      className="pressable group grid gap-3 rounded-xl border border-slate-800 bg-slate-900/50 p-4 hover:border-sky-500/40 hover:bg-slate-900/70 lg:grid-cols-[auto_minmax(0,2fr)_repeat(5,minmax(0,1fr))] lg:items-center"
     >
-      <SetAccentBar accentKey={accentKey} />
       <PlayerAvatar name={playerName} size="sm" />
 
       <div>

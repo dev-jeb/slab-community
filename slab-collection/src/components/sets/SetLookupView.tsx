@@ -10,7 +10,7 @@ import {
   SearchToolbar,
   SortSelect,
 } from "@/components/search/SearchToolbar";
-import { SetsCatalogTable } from "@/components/sets/SetsCatalogTable";
+import { SetRow } from "@/components/sets/SetRow";
 import { setSearchText } from "@/lib/set-label";
 import { readUrlParam, writeUrlParams } from "@/lib/url-state";
 import {
@@ -24,8 +24,8 @@ import {
 import type { SetOut } from "@/lib/slab/types";
 
 const SORT_OPTIONS: { value: SetLookupSort; label: string }[] = [
-  { value: "year_desc", label: "Year (newest)" },
-  { value: "year_asc", label: "Year (oldest)" },
+  { value: "release_desc", label: "Newest release" },
+  { value: "release_asc", label: "Oldest release" },
   { value: "cards_desc", label: "Most cards" },
   { value: "priced_desc", label: "Most priced cards" },
   { value: "pct_priced_desc", label: "% Priced" },
@@ -40,18 +40,18 @@ export function SetLookupView() {
   const [setSort, setSetSort] = useState<SetLookupSort>(
     () =>
       readUrlParam(searchParams, "sort", [
-        "year_desc",
-        "year_asc",
+        "release_desc",
+        "release_asc",
         "cards_desc",
         "priced_desc",
         "pct_priced_desc",
-      ] as const) ?? "year_desc",
+      ] as const) ?? "release_desc",
   );
 
   useEffect(() => {
     writeUrlParams({
       q: query || null,
-      sort: setSort === "year_desc" ? null : setSort,
+      sort: setSort === "release_desc" ? null : setSort,
     });
   }, [query, setSort]);
   const [error, setError] = useState<string | null>(null);
@@ -126,9 +126,13 @@ export function SetLookupView() {
       {isPending && !sets.length ? (
         <ResultsSkeleton />
       ) : filteredSets.length ? (
-        <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
-          <SetsCatalogTable sets={filteredSets} newSetUuids={newSetUuids} />
-        </section>
+        // A plain stack, not a bordered card around a table: each row is already a surface, and
+        // wrapping a hundred of them in one more panel just draws a box around the page.
+        <div className="space-y-3">
+          {filteredSets.map((set) => (
+            <SetRow key={set.uuid} set={set} isNew={newSetUuids.has(set.uuid)} />
+          ))}
+        </div>
       ) : (
         <EmptyResults>No products match this search.</EmptyResults>
       )}

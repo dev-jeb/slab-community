@@ -47,11 +47,17 @@ const PAGE_SIZE = 48;
 const FACET_LIMIT = 200;
 
 /** The API's sort grammar (`-` prefix = descending). FMV isn't a catalog sort key. */
-type CatalogSort = "-year" | "year" | "card_number" | "subject" | "set";
+type CatalogSort = "-release" | "release" | "card_number" | "subject" | "set";
 
+/**
+ * Newest is `release`, not `year`: `year` is the SEASON (2025 for a 2025-26 product) and a
+ * season's products ship across fourteen months, so ordering by it ties a whole season together
+ * and ranks 2025-26 MVP (shelves July 2025) above 2024-25 Ultimate Collection (October 2025).
+ * `release` is the API's set-release-date key, which is what a collector means by newest.
+ */
 const SORT_OPTIONS: { value: CatalogSort; label: string }[] = [
-  { value: "-year", label: "Year (newest)" },
-  { value: "year", label: "Year (oldest)" },
+  { value: "-release", label: "Newest release" },
+  { value: "release", label: "Oldest release" },
   { value: "set", label: "Set" },
   { value: "card_number", label: "Card #: low to high" },
   { value: "subject", label: "Last name (A–Z)" },
@@ -92,12 +98,12 @@ export function CatalogSearchView() {
   const [sort, setSort] = useState<CatalogSort>(
     () =>
       readUrlParam(searchParams, "sort", [
-        "-year",
-        "year",
+        "-release",
+        "release",
         "card_number",
         "subject",
         "set",
-      ] as const) ?? "-year",
+      ] as const) ?? "-release",
   );
   // Drill-downs from the Sets and Teams tabs. A set is filtered by slug, which the facet doesn't
   // carry, so the name comes along to label the chip and the slug is resolved when it's picked.
@@ -117,7 +123,7 @@ export function CatalogSearchView() {
       browse: browse === "cards" ? null : browse,
       filter: filter === "all" ? null : filter,
       owned: ownership === "any" ? null : ownership,
-      sort: sort === "-year" ? null : sort,
+      sort: sort === "-release" ? null : sort,
       set: pickedSet?.slug ?? null,
       setname: pickedSet ? pickedSet.name : null,
       team: pickedTeam,
@@ -299,6 +305,24 @@ export function CatalogSearchView() {
     setBrowse("cards");
   }
 
+  /**
+   * Dropping a drill chip is the undo of the pick that created it, so it lands back on the
+   * grouping tab you drilled from — not on the ungrouped card list.
+   *
+   * Clearing the chip while staying on Cards undid more than was asked: you'd wanted out of THIS
+   * set, and instead got every card in the catalog and a lost place in the group list, with the
+   * tab strip the only way back.
+   */
+  function clearSet() {
+    setPickedSet(null);
+    setBrowse("sets");
+  }
+
+  function clearTeam() {
+    setPickedTeam(null);
+    setBrowse("teams");
+  }
+
   if (needsSetup) return <SetupPrompt />;
 
   return (
@@ -345,13 +369,10 @@ export function CatalogSearchView() {
       {pickedSet || pickedTeam ? (
         <div className="flex flex-wrap items-center gap-2">
           {pickedSet ? (
-            <DrillChip
-              label={pickedSet.name}
-              onClear={() => setPickedSet(null)}
-            />
+            <DrillChip label={pickedSet.name} onClear={clearSet} />
           ) : null}
           {pickedTeam ? (
-            <DrillChip label={pickedTeam} onClear={() => setPickedTeam(null)} />
+            <DrillChip label={pickedTeam} onClear={clearTeam} />
           ) : null}
         </div>
       ) : null}

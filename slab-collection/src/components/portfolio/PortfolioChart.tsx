@@ -1,122 +1,205 @@
-import type { PortfolioPoint } from "@/lib/slab/types";
+"use client";
+
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ReferenceDot,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import type { TooltipContentProps } from "recharts";
+
+import { ChartTooltip, SeriesKey } from "@/components/charts/ChartTooltip";
+import {
+  CHROME,
+  DOT_RADIUS,
+  LINE_WIDTH,
+  SERIES,
+  formatAxisCurrency,
+  formatChartDate,
+  paddedDomain,
+  parseChartDate,
+} from "@/components/charts/theme";
 import { formatCurrency } from "@/lib/slab/format";
+import type { PortfolioPoint } from "@/lib/slab/types";
 
-interface PortfolioChartProps {
-  points: PortfolioPoint[];
+/** The surface this chart draws on — `.panel`, for the marker's ring. */
+const SURFACE = "#162040";
+
+interface Row {
+  t: number;
+  value: number;
+  cost: number | null;
 }
 
-function parseChartDate(value: string): number {
-  return Date.parse(value.includes("T") ? value : `${value}T12:00:00`);
-}
-
-function formatChartDate(value: string): string {
-  const time = parseChartDate(value);
-  if (Number.isNaN(time)) return value;
-  return new Date(time).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
-}
-
-function dateTickIndexes(length: number, count = 6): number[] {
-  if (length <= count) return Array.from({ length }, (_, index) => index);
-  const last = length - 1;
-  const ticks = new Set<number>();
-  for (let index = 0; index < count; index += 1) {
-    ticks.add(Math.round((index / (count - 1)) * last));
-  }
-  return [...ticks].sort((a, b) => a - b);
-}
-
-export function PortfolioChart({ points }: PortfolioChartProps) {
+/**
+ * What the collection is worth over time, against what it cost.
+ *
+ * Recharts rather than the hand-rolled SVG this used to be — same reasoning as `PriceHistoryChart`,
+ * and the two share `charts/theme` so a series color means the same thing on both.
+ *
+ * Two things this chart is careful about:
+ *  - **Cost basis is a real series, not a gray dashed reference.** It gets the foil hue (gold is
+ *    the money color everywhere else in slab) and a legend key of its own. Warm-against-cool is
+ *    also the pairing that survives color blindness; a near-gray line fails the chroma floor and
+ *    stops doing identity work at all.
+ *  - **The series is AS-OF, so it steps up when you BUY.** Each point values only the copies owned
+ *    on that date, which is why the gap between the two lines is the paper gain and why a jump in
+ *    both at once is an acquisition, not the market moving. The caption says so — differencing two
+ *    points of this line is not price movement.
+ */
+export function PortfolioChart({ points }: { points: PortfolioPoint[] }) {
   if (points.length < 2) {
     return (
-      <div className="flex h-48 items-center justify-center rounded-xl border border-dashed border-slate-700 text-sm text-slate-500">
+      <div className="flex h-48 items-center justify-center rounded-xl border border-dashed border-[var(--border)] text-sm text-[var(--text-dim)]">
         Not enough history yet to chart portfolio value.
       </div>
     );
   }
 
-  const values = points.map((point) => Number(point.portfolio_value));
-  const costs = points.map((point) =>
-    point.cost_basis ? Number(point.cost_basis) : null,
+  const rows: Row[] = points.map((point) => ({
+    t: parseChartDate(point.date),
+    value: Number(point.portfolio_value),
+    cost: point.cost_basis != null ? Number(point.cost_basis) : null,
+  }));
+
+  // Only chart cost basis when every point has one: a line that vanishes for a stretch reads as
+  // "cost went to zero" rather than "we don't know".
+  const hasCost = rows.every((row) => row.cost !== null);
+
+  const values = rows.map((row) => row.value);
+  const costs = hasCost ? rows.map((row) => row.cost as number) : [];
+  const domain = paddedDomain(
+    Math.min(...values, ...costs),
+    Math.max(...values, ...costs),
   );
-  const min = Math.min(...values, ...costs.filter((v): v is number => v !== null));
-  const max = Math.max(...values, ...costs.filter((v): v is number => v !== null));
-  const range = max - min || 1;
-  const width = 800;
-  const height = 220;
-  const pad = 24;
-  const padBottom = 36;
-  const times = points.map((point) => parseChartDate(point.date));
-  const rangeStart = Math.min(...times);
-  const rangeEnd = Math.max(...times);
-  const dateSpan = rangeEnd - rangeStart;
 
-  function toX(index: number): number {
-    if (dateSpan <= 0 || Number.isNaN(times[index])) {
-      return pad + (index / (points.length - 1)) * (width - pad * 2);
-    }
-    return pad + ((times[index] - rangeStart) / dateSpan) * (width - pad * 2);
-  }
+  const rangeStart = rows[0].t;
+  const rangeEnd = rows.at(-1)!.t;
+  const ticks =
+    rangeEnd > rangeStart
+      ? [0, 1, 2, 3, 4].map((i) => rangeStart + ((rangeEnd - rangeStart) * i) / 4)
+      : [rangeStart];
 
-  function toPath(nums: number[]) {
-    return nums
-      .map((value, index) => {
-        const x = toX(index);
-        const y = height - padBottom - ((value - min) / range) * (height - pad - padBottom);
-        return `${index === 0 ? "M" : "L"}${x},${y}`;
-      })
-      .join(" ");
-  }
+  const last = rows.at(-1)!;
 
-  const valuePath = toPath(values);
-  const costPath = costs.every((value) => value !== null)
-    ? toPath(costs as number[])
-    : null;
-  const ticks = dateTickIndexes(points.length);
+  const renderTooltip = ({ active, payload }: TooltipContentProps) => {
+    if (!active || !payload?.length) return null;
+    const row = payload[0]?.payload as Row | undefined;
+    if (!row) return null;
+
+    return (
+      <ChartTooltip
+        label={formatChartDate(row.t, true)}
+        rows={[
+          {
+            name: "market value",
+            value: formatCurrency(String(row.value)),
+            color: SERIES.value,
+          },
+          ...(hasCost && row.cost !== null
+            ? [
+                {
+                  name: "cost basis",
+                  value: formatCurrency(String(row.cost)),
+                  color: SERIES.costBasis,
+                },
+              ]
+            : []),
+        ]}
+      />
+    );
+  };
 
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
-      <div className="mb-4 flex flex-wrap gap-4 text-sm">
-        <span className="flex items-center gap-2 text-slate-300">
-          <span className="h-0.5 w-6 bg-sky-400" />
-          Market value
+    <section className="panel p-5">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3 text-sm">
+        <div className="flex flex-wrap items-center gap-4">
+          <SeriesKey color={SERIES.value} label="Market value" />
+          {hasCost ? (
+            <SeriesKey color={SERIES.costBasis} label="Cost basis" />
+          ) : null}
+        </div>
+        <span className="text-[var(--text-dim)]">
+          {formatCurrency(String(last.value))} today
         </span>
-        {costPath ? (
-          <span className="flex items-center gap-2 text-slate-300">
-            <span className="h-0.5 w-6 bg-slate-500" />
-            Cost basis
-          </span>
-        ) : null}
       </div>
-      <svg viewBox={`0 0 ${width} ${height}`} className="h-56 w-full">
-        <path d={valuePath} fill="none" stroke="#60a5fa" strokeWidth="2.5" />
-        {costPath ? (
-          <path d={costPath} fill="none" stroke="#64748b" strokeWidth="2" strokeDasharray="6 4" />
-        ) : null}
-        {ticks.map((pointIndex, index) => {
-          const point = points[pointIndex];
-          const x = toX(pointIndex);
-          const anchor =
-            index === 0 ? "start" : index === ticks.length - 1 ? "end" : "middle";
-          return (
-            <text
-              key={`${point.date}-${pointIndex}`}
-              x={x}
-              y={height - 8}
-              textAnchor={anchor}
-              fill="#64748b"
-              fontSize="11"
-            >
-              {formatChartDate(point.date)}
-            </text>
-          );
-        })}
-      </svg>
-      <div className="mt-1 text-right text-xs text-slate-500">
-        {formatCurrency(String(values.at(-1)))} today
-      </div>
-    </div>
+
+      <ResponsiveContainer width="100%" height={220}>
+        <LineChart data={rows} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+          <CartesianGrid stroke={CHROME.grid} strokeWidth={1} vertical={false} />
+          <XAxis
+            type="number"
+            dataKey="t"
+            scale="time"
+            domain={[rangeStart, rangeEnd]}
+            ticks={ticks}
+            tickFormatter={(value: number) => formatChartDate(value)}
+            tick={{ fill: CHROME.axisText, fontSize: 11 }}
+            tickLine={false}
+            axisLine={{ stroke: CHROME.grid }}
+            minTickGap={16}
+          />
+          <YAxis
+            domain={domain}
+            tickFormatter={formatAxisCurrency}
+            tick={{ fill: CHROME.axisText, fontSize: 11 }}
+            tickLine={false}
+            axisLine={false}
+            width={64}
+          />
+          <Tooltip
+            content={renderTooltip}
+            cursor={{ stroke: CHROME.tooltipBorder, strokeWidth: 1 }}
+          />
+          {hasCost ? (
+            <Line
+              type="monotone"
+              dataKey="cost"
+              stroke={SERIES.costBasis}
+              strokeWidth={LINE_WIDTH}
+              dot={false}
+              activeDot={{
+                r: DOT_RADIUS,
+                fill: SERIES.costBasis,
+                stroke: SURFACE,
+                strokeWidth: 2,
+              }}
+              isAnimationActive={false}
+            />
+          ) : null}
+          <Line
+            type="monotone"
+            dataKey="value"
+            stroke={SERIES.value}
+            strokeWidth={LINE_WIDTH}
+            dot={false}
+            activeDot={{
+              r: DOT_RADIUS,
+              fill: SERIES.value,
+              stroke: SURFACE,
+              strokeWidth: 2,
+            }}
+            isAnimationActive={false}
+          />
+          <ReferenceDot
+            x={last.t}
+            y={last.value}
+            r={DOT_RADIUS}
+            fill={SERIES.value}
+            stroke={SURFACE}
+            strokeWidth={2}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+
+      <p className="mt-3 text-xs text-[var(--text-dim)]">
+        Each point values only the cards you owned that day, so the line steps up when you buy —
+        the distance between it and cost basis is your paper gain, not a market move.
+      </p>
+    </section>
   );
 }

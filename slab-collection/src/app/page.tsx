@@ -1,12 +1,15 @@
 import { redirect } from "next/navigation";
 
-import { CollectionHome } from "@/components/collection/CollectionHome";
+import {
+  CollectionHome,
+  type CollectionHomeView,
+} from "@/components/collection/CollectionHome";
 
 /**
- * My Collection: the Overview dashboard, plus the Grading Desk as a second view — both are about
- * the cards you own, which is the bar for living under this roof. Anything that isn't (searching,
- * the catalog) forwards elsewhere: the `?view=search` this page briefly used goes to /search,
- * where one page covers your collection AND the whole catalog.
+ * My Collection: the Overview dashboard, plus Sales and the Grading Desk as sibling views — all
+ * three are about the cards you own, which is the bar for living under this roof. Anything that
+ * isn't (searching, the catalog) forwards elsewhere: the `?view=search` this page briefly used
+ * goes to /search, where one page covers your collection AND the whole catalog.
  */
 export default async function Home({
   searchParams,
@@ -23,5 +26,8 @@ export default async function Home({
     redirect(query ? `/search?${query}` : "/search");
   }
 
-  return <CollectionHome view={view === "grading" ? "grading" : "overview"} />;
+  const known: CollectionHomeView[] = ["grading", "sales"];
+  const active = known.find((candidate) => candidate === view) ?? "overview";
+
+  return <CollectionHome view={active} />;
 }

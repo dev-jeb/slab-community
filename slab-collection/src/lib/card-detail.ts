@@ -45,7 +45,8 @@ export interface GradedPriceSummary {
   liquidity: Liquidity | null;
 }
 
-export interface ParallelSummary {
+/** One printing of a slot — the base or any parallel, including the one being viewed. */
+export interface PrintingSummary {
   card: CardOut;
   headlineFmv: string | null;
   ownedCount: number;
@@ -58,7 +59,13 @@ export interface CardDetailResult {
   graded: GradedPriceSummary[];
   comps: CardComps;
   priceHistory: CardPriceHistory;
-  parallels: ParallelSummary[];
+  /** The WHOLE rainbow, this printing included, in one stable order.
+   *
+   *  The rail highlights the active one in place rather than hoisting it to the front: a rail that
+   *  reorders under the click is what made picking a parallel read as a page change instead of a
+   *  step sideways. Including the active printing also means its run size and FMV come from the
+   *  same place as every other cell's, so the row of numbers is comparable. */
+  printings: PrintingSummary[];
   ownedCopies: CardCopyOut[];
   gradeKeys: string[];
 }
@@ -120,19 +127,25 @@ function indexOwnedCopies(
   return index;
 }
 
-function summarizeParallels(
-  parallels: CardOut[],
+function summarizePrintings(
+  printings: CardOut[],
   fmvByUuid: Map<string, string | null>,
   ownedIndex: Map<string, CardCopyOut[]>,
-): ParallelSummary[] {
-  return parallels
+): PrintingSummary[] {
+  return printings
     .map((card) => ({
       card,
       headlineFmv:
         card.market?.fair_market_value ?? fmvByUuid.get(card.uuid) ?? null,
       ownedCount: countOwnedCopies(ownedIndex.get(card.uuid) ?? []),
     }))
+    // Base first, then parallels by value. The base is the printing everyone can name, so it
+    // anchors the left end of the rail no matter which printing you're on; sorting it by price
+    // would bury a $4 base between two parallels and move the rail's landmark around.
     .sort((a, b) => {
+      const aBase = a.card.finish ? 0 : 1;
+      const bBase = b.card.finish ? 0 : 1;
+      if (aBase !== bBase) return bBase - aBase;
       const aPrice = a.headlineFmv ? Number(a.headlineFmv) : -1;
       const bPrice = b.headlineFmv ? Number(b.headlineFmv) : -1;
       return bPrice - aPrice;
@@ -235,11 +248,7 @@ export async function fetchCardDetail(
     (slotCopies.items ?? []).filter((copy) => slotUuids.has(copy.card_uuid)),
   );
   const ownedCopies = ownedIndex.get(cardUuid) ?? [];
-  const parallelSummaries = summarizeParallels(
-    parallels.filter((card) => card.uuid !== cardUuid),
-    fmvByUuid,
-    ownedIndex,
-  );
+  const printings = summarizePrintings(parallels, fmvByUuid, ownedIndex);
 
   const rawPoint = pickRawPoint(market.price_points);
   // The comps arrived unfiltered, so the raw summary filters for itself: confirmed-raw sales
@@ -303,7 +312,7 @@ export async function fetchCardDetail(
     graded,
     comps,
     priceHistory,
-    parallels: parallelSummaries,
+    printings,
     ownedCopies,
     gradeKeys,
   };

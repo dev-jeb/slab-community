@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 
 import { useNews } from "@/components/news/NewsProvider";
+import { LinkLabel } from "@/components/ui/LinkLabel";
 
 // Portfolio was a primary tab because it was where the money lived; it's the My Collection
 // dashboard now. Search takes the freed slot — it's the one screen you open with a question, and
@@ -28,10 +29,10 @@ const primaryTabs = [
   },
 ];
 
-// Grading isn't here: the Grading Desk lives inside My Collection (`/?view=grading`), reachable
-// from that tab's view switcher.
+// Grading and Sales aren't here: both live inside My Collection (`/?view=grading`,
+// `/?view=sales`), reachable from that tab's view switcher.
 const moreLinks = [
-  { href: "/sales", label: "Sales" },
+  { href: "/market", label: "Market" },
   { href: "/players", label: "Player pricing" },
   { href: "/news", label: "Alerts", showBadge: true },
 ];
@@ -49,7 +50,9 @@ export function MobileBottomNav() {
         <button
           type="button"
           aria-label="Close menu"
-          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          // A full-screen scrim: it's a button only so a stray tap closes the sheet. Nudging the
+          // whole screen a pixel would be motion confirming nothing.
+          className="no-press fixed inset-0 z-40 bg-black/50 md:hidden"
           onClick={() => setMoreOpen(false)}
         />
       ) : null}
@@ -65,13 +68,13 @@ export function MobileBottomNav() {
                 key={link.href}
                 href={link.href}
                 onClick={() => setMoreOpen(false)}
-                className={`flex items-center justify-between rounded-xl px-4 py-3 text-sm ${
+                className={`pressable flex items-center justify-between rounded-xl px-4 py-3 text-sm ${
                   active
                     ? "bg-sky-500/10 text-sky-200"
                     : "text-slate-200 hover:bg-slate-900"
                 }`}
               >
-                <span>{link.label}</span>
+                <LinkLabel pendingClassName="text-sky-300">{link.label}</LinkLabel>
                 {badge > 0 ? (
                   <span className="rounded-full bg-sky-500 px-2 py-0.5 text-[10px] font-semibold text-white">
                     {badge > 9 ? "9+" : badge}
@@ -92,11 +95,11 @@ export function MobileBottomNav() {
               <Link
                 key={tab.href}
                 href={tab.href}
-                className={`rounded-lg px-2 py-2 text-center text-xs font-medium ${
+                className={`pressable block rounded-lg px-2 py-2 text-center text-xs font-medium ${
                   active ? "text-sky-300" : "text-slate-400"
                 }`}
               >
-                {tab.label}
+                <LinkLabel pendingClassName="text-sky-300">{tab.label}</LinkLabel>
               </Link>
             );
           })}

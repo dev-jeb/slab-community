@@ -12,5 +12,5 @@ export default async function PortfolioRedirectPage({
   searchParams: Promise<{ tab?: string }>;
 }) {
   const { tab } = await searchParams;
-  redirect(tab === "sales" ? "/sales" : "/");
+  redirect(tab === "sales" ? "/?view=sales" : "/");
 }

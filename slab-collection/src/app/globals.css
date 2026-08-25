@@ -148,3 +148,70 @@ code {
     opacity: 0;
   }
 }
+
+/* --- Click feedback -----------------------------------------------------------
+   Every control says it was clicked.
+
+   Hover tells you a thing IS clickable; it says nothing at the moment you press it,
+   and on anything that isn't instant — a route change, a fetch — that silence reads
+   as "nothing happened", so you click again. The press closes that gap: the control
+   sinks a pixel and dims for as long as the pointer is down, then springs back.
+
+   Width-independent on purpose. A `scale()` press is crisp on a 60px tab and a wobble
+   on a full-width card row, where it swings the edges ten pixels; 1px down and a dim
+   read the same at every size, which is what lets ONE rule cover the whole app.
+
+   It applies to every `<button>` without opting in — that is the point, so the pill
+   someone adds tomorrow is covered without remembering a class — and to anything else
+   carrying `.pressable`: link rows, cards, the `<a>`s that behave like buttons. Inline
+   prose links are deliberately left out; text shouldn't jiggle. */
+button,
+.pressable {
+  transition:
+    transform 120ms ease,
+    filter 120ms ease,
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease;
+  /* No blue flash on tap — the press below is the feedback on touch too. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:not(:disabled):active,
+.pressable:active {
+  transform: translateY(1px);
+  filter: brightness(0.9);
+}
+
+/* A disabled control that still moved would be lying about what the click did. */
+button:disabled {
+  cursor: not-allowed;
+}
+
+/* The opt-out, for the rare button that isn't a button-shaped thing — a full-screen scrim whose
+   whole job is to catch a stray tap, say. Nudging one of those is motion with nothing to confirm. */
+.no-press:active {
+  transform: none;
+  filter: none;
+}
+
+/* Keyboard is the same interaction without a pointer, so it gets the same
+   confirmation: foil, so the ring reads as slab rather than as the browser default.
+   `:focus-visible` (not `:focus`) keeps it off mouse clicks, where the press already
+   answered. */
+button:focus-visible,
+a:focus-visible,
+[role="tab"]:focus-visible,
+.pressable:focus-visible {
+  outline: 2px solid var(--foil);
+  outline-offset: 2px;
+}
+
+/* The press is motion, and this setting asks for none of it. The dim stays — losing
+   the transform must not mean losing the confirmation. */
+@media (prefers-reduced-motion: reduce) {
+  button:not(:disabled):active,
+  .pressable:active {
+    transform: none;
+  }
+}

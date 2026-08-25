@@ -352,7 +352,7 @@ function ChaseCardEntry({
   return (
     <Link
       href={`/cards/${card.uuid}`}
-      className={`flex items-start gap-3 rounded-lg border px-3 py-2.5 transition ${
+      className={`pressable flex items-start gap-3 rounded-lg border px-3 py-2.5 ${
         owned
           ? "border-emerald-500/30 bg-emerald-500/5 hover:border-emerald-500/50"
           : "border-slate-800 bg-slate-950/40 hover:border-slate-600"

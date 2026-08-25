@@ -182,7 +182,7 @@ export function CollectionOverview() {
                       <Link
                         key={set.label}
                         href={collectionSetSearchHref(set.setSlug)}
-                        className="relative -mx-2 flex items-center justify-between gap-4 overflow-hidden rounded-lg border-b border-[#2a3a5c] px-2 py-3 transition last:border-0 hover:bg-[#1a2744]"
+                        className="pressable relative -mx-2 flex items-center justify-between gap-4 overflow-hidden rounded-lg border-b border-[#2a3a5c] px-2 py-3 last:border-0 hover:bg-[#1a2744]"
                       >
                         <SetAccentBar accentKey={set.setSlug} />
                         {body}
@@ -245,7 +245,7 @@ function HighlightRow({ card }: { card: HighlightCard }) {
   return (
     <Link
       href={`/cards/${card.card_uuid}`}
-      className="-mx-2 flex items-start justify-between gap-4 rounded-lg border-b border-[#2a3a5c] px-2 py-3 transition last:border-0 hover:bg-[#1a2744]"
+      className="pressable -mx-2 flex items-start justify-between gap-4 rounded-lg border-b border-[#2a3a5c] px-2 py-3 last:border-0 hover:bg-[#1a2744]"
     >
       {body}
     </Link>

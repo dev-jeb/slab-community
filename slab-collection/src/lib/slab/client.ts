@@ -24,9 +24,14 @@ import type {
   CustomSetSearchQuery,
   CustomSetSearchResult,
   DashboardStats,
+  LifecycleCurve,
+  LifecycleUniverse,
   MeOut,
   PortfolioHistory,
+  SealedMarket,
+  SealedPriceHistory,
   SealedProductOut,
+  SetTopCards,
   SetOut,
   SetSearchQuery,
   SetSearchResult,
@@ -219,6 +224,48 @@ export async function searchSets(
 
 export async function getSetSealed(setUuid: string): Promise<SealedProductOut[]> {
   return slabFetch<SealedProductOut[]>(`/sets/${setUuid}/sealed`);
+}
+
+/**
+ * A sealed SKU's price series — the same shape and the same snapshot rule as a card's, keyed by
+ * product instead of by (card, finish, grade). Sealed has no grade or finish axis: v1 prices
+ * factory-sealed only.
+ */
+export async function getSealedPriceHistory(
+  productUuid: string,
+  query: { interval?: string; start?: string; end?: string } = {},
+): Promise<SealedPriceHistory> {
+  const params = new URLSearchParams();
+  params.set("interval", query.interval ?? "daily");
+  if (query.start) params.set("start", query.start);
+  if (query.end) params.set("end", query.end);
+
+  return slabFetch<SealedPriceHistory>(
+    `/sealed/${productUuid}/price-history?${params.toString()}`,
+  );
+}
+
+/**
+ * A sealed SKU's market — its snapshot points plus the recent sales behind them.
+ *
+ * The comps are the receipts: a sealed price is a trimmed median of these, and being able to read
+ * the individual sales is what separates a number you can check from one you have to trust.
+ */
+export async function getSealedMarket(
+  productUuid: string,
+  compsLimit = 50,
+): Promise<SealedMarket> {
+  return slabFetch<SealedMarket>(
+    `/sealed/${productUuid}/market?comps_limit=${compsLimit}`,
+  );
+}
+
+/** The set's most expensive printings by headline FMV — RAW preferred, else best-sampled grade. */
+export async function getSetTopCards(
+  setUuid: string,
+  limit = 15,
+): Promise<SetTopCards> {
+  return slabFetch<SetTopCards>(`/sets/${setUuid}/top-cards?limit=${limit}`);
 }
 
 export async function searchCards(
@@ -552,6 +599,19 @@ export async function fetchCollection(
     items: copies,
     summary: first.summary,
   };
+}
+
+/**
+ * The lifecycle benchmark — the current build, frozen until the next one.
+ *
+ * Public on the API (no key needed); this goes through the same authenticated fetch as everything
+ * else because there's no reason for a second code path. 404 is a real answer here, not a bug: it
+ * means no build has run yet, and the caller is expected to say so rather than draw an empty curve.
+ */
+export async function getLifecycleCurve(
+  universe: LifecycleUniverse = "raw_cards",
+): Promise<LifecycleCurve> {
+  return slabFetch<LifecycleCurve>(`/market/lifecycle?universe=${universe}`);
 }
 
 export { SlabApiError };

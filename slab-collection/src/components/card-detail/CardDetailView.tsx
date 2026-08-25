@@ -1,17 +1,21 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState, useTransition } from "react";
 
-import { CardPriceChart, formatPriceHistoryRange } from "@/components/card-detail/CardPriceChart";
+import {
+  PriceHistoryChart,
+  formatPriceHistoryRange,
+} from "@/components/charts/PriceHistoryChart";
 import { GradingDeskPanel } from "@/components/card-detail/GradingDeskPanel";
 import { LiquidityPace } from "@/components/card-detail/LiquidityPace";
+import { PrintingStrip } from "@/components/card-detail/PrintingStrip";
 import { CopySaleActions } from "@/components/sales/CopySaleActions";
 import { OwnedCopyRow } from "@/components/collection/OwnedCopyRow";
 import { SetupPrompt } from "@/components/collection/SetupPrompt";
 import { PlayerAvatar, primarySubjectName } from "@/components/collection/PlayerAvatar";
 import { PriceConfidenceBadge } from "@/components/collection/PriceConfidenceBadge";
 import { FolderTabs } from "@/components/ui/FolderTabs";
+import { Sheen, SheenBar } from "@/components/ui/sheen";
 import {
   cardSubtitle,
   cardTitle,
@@ -33,6 +37,25 @@ interface CardDetailViewProps {
 
 type DetailFolder = "copies" | "pricing" | "history" | "comps" | "grade";
 
+/** The rail's footprint before the rainbow lands — same heading row, same 3.75rem cells. */
+function PrintingRailSkeleton() {
+  return (
+    <section aria-hidden="true">
+      <div className="flex items-baseline justify-between">
+        <h3 className="heading-section">Printings</h3>
+        <SheenBar className="h-4 w-10" />
+      </div>
+      <Sheen loading label="Loading printings" className="mt-2">
+        <div className="flex gap-2 overflow-hidden">
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <SheenBar key={i} className="h-[3.75rem] w-[168px] shrink-0 rounded-lg" />
+          ))}
+        </div>
+      </Sheen>
+    </section>
+  );
+}
+
 function OwnedBadge({ count }: { count: number }) {
   if (count <= 0) return null;
 
@@ -44,6 +67,16 @@ function OwnedBadge({ count }: { count: number }) {
 }
 
 export function CardDetailView({ cardUuid }: CardDetailViewProps) {
+  // The printing on screen, which is not always the one the route was built with.
+  //
+  // Picking another printing off the rail used to be a route change: the page tore down, blanked
+  // to a skeleton and rebuilt — a whole page for what is really a step sideways within one card.
+  // So a pick swaps THIS component's data instead (the rail slides, the numbers below cross-fade)
+  // and the address bar catches up afterwards via the history API, which Next syncs without
+  // re-rendering the route. Every fetch keys off this, not the prop.
+  const [activeUuid, setActiveUuid] = useState(cardUuid);
+  const [routeUuid, setRouteUuid] = useState(cardUuid);
+
   const [detail, setDetail] = useState<CardDetailResult | null>(null);
   const [gradeKey, setGradeKey] = useState("RAW");
   // The grade selector swaps only what depends on the grade — that grade's comps and history —
@@ -61,11 +94,36 @@ export function CardDetailView({ cardUuid }: CardDetailViewProps) {
   const [isSlicePending, startSliceTransition] = useTransition();
   const [folder, setFolder] = useState<DetailFolder>("pricing");
 
+  // A real navigation — Back, or a link from elsewhere — moves the prop, and that wins. React's
+  // documented "adjust state when a prop changes" pattern: done during render, so nothing renders
+  // with the stale printing first.
+  if (routeUuid !== cardUuid) {
+    setRouteUuid(cardUuid);
+    setActiveUuid(cardUuid);
+    setFolder("pricing");
+    resetGradeSelections();
+  }
+
+  /**
+   * Grade selections are per-printing — a /10 parallel's graded rows aren't the base card's — so
+   * every change of printing clears them. The open TAB deliberately survives a rail step: stepping
+   * along the rainbow to compare the same panel across printings is what the rail is for, and
+   * yanking you back to Pricing each time is the page-change feeling in miniature. A real arrival
+   * (above) does reset it, since that's a different card, not a different printing of this one.
+   */
+  function resetGradeSelections() {
+    setGradeKey("RAW");
+    setSalesGrade("ALL");
+    // The cached slice belongs to the printing that asked for it and carries no card of its own,
+    // so a stale one would be shown as this printing's history the moment you re-pick that grade.
+    setSlice(null);
+  }
+
   const loadDetail = useCallback(() => {
     startTransition(async () => {
       setError(null);
 
-      const response = await fetch(`/api/cards/${cardUuid}`);
+      const response = await fetch(`/api/cards/${activeUuid}`);
 
       if (response.status === 503) {
         setNeedsSetup(true);
@@ -82,29 +140,50 @@ export function CardDetailView({ cardUuid }: CardDetailViewProps) {
       setDetail(data);
       setNeedsSetup(false);
     });
-  }, [cardUuid]);
+  }, [activeUuid]);
 
   useEffect(() => {
     loadDetail();
   }, [loadDetail]);
 
   useEffect(() => {
-    setFolder("pricing");
-    setGradeKey("RAW");
-    setSalesGrade("ALL");
-  }, [cardUuid]);
-
-  useEffect(() => {
     if (gradeKey === "RAW") return;
 
     startSliceTransition(async () => {
       const response = await fetch(
-        `/api/cards/${cardUuid}?slice=grade&grade_key=${encodeURIComponent(gradeKey)}`,
+        `/api/cards/${activeUuid}?slice=grade&grade_key=${encodeURIComponent(gradeKey)}`,
       );
       if (!response.ok) return;
       setSlice((await response.json()) as CardGradeSlice);
     });
-  }, [cardUuid, gradeKey]);
+  }, [activeUuid, gradeKey]);
+
+  /**
+   * Step the rail to another printing without leaving the page.
+   *
+   * The address bar is rewritten with `replaceState` rather than the Next router: `router.push`
+   * re-renders the route and remounts this component, which is the teardown the swap exists to
+   * avoid. Replace rather than push, so Back returns to wherever you came from (the search, the
+   * set) instead of walking you back through every printing you glanced at — the rail is one page,
+   * not fifteen. Either way the URL always names what's on screen, so a refresh or a pasted link
+   * lands on the right printing.
+   */
+  const pickPrinting = useCallback(
+    (uuid: string) => {
+      if (uuid === activeUuid) return;
+      setActiveUuid(uuid);
+      setGradeKey("RAW");
+      setSalesGrade("ALL");
+      setSlice(null);
+      window.history.replaceState(null, "", `/cards/${uuid}`);
+    },
+    [activeUuid],
+  );
+
+  // The old printing stays on screen while the new one loads, dimmed rather than blanked: these
+  // cards differ by a finish and a price, so replacing the whole page with a skeleton to change
+  // two numbers is what made a pick feel like a navigation.
+  const swapping = detail !== null && detail.cardUuid !== activeUuid;
 
   // RAW history comes from the full detail; other grades from their slice once it lands. Sales
   // are grade-independent — loaded once for all grades, narrowed client-side by salesGrade.
@@ -151,9 +230,28 @@ export function CardDetailView({ cardUuid }: CardDetailViewProps) {
           size="md"
           className="h-16 w-16 border-2 border-slate-700/80"
         />
-        <div className="min-w-0 flex-1">
+        <div
+          className={`min-w-0 flex-1 transition-opacity duration-200 ${
+            swapping ? "opacity-40" : "opacity-100"
+          }`}
+        >
           {isPending && !detail ? (
-            <div className="h-24 animate-pulse rounded-xl bg-slate-900" />
+            // One bar per line of the loaded header, at that line's size and margin — the sheen
+            // rule this file kept breaking: a placeholder that doesn't reserve the real content's
+            // size just moves the jump to the moment the data lands. The old 96px block was half
+            // the height of what replaced it, so every card load shoved the page down.
+            <Sheen loading label="Loading card">
+              <SheenBar className="h-4 w-48" />
+              <SheenBar className="mt-2 h-9 w-72 max-w-full" />
+              <SheenBar className="mt-2 h-6 w-96 max-w-full" />
+              <SheenBar className="mt-4 h-9 w-28" />
+              {/* Same reserved slot as the loaded header below, so the two states are the same
+                  height by construction rather than by two numbers agreeing. */}
+              <div className="min-h-12">
+                <SheenBar className="mt-1.5 h-[21px] w-44" />
+                <SheenBar className="mt-1 h-4 w-24" />
+              </div>
+            </Sheen>
           ) : market ? (
             <>
               <p className="text-xs uppercase tracking-[0.25em] text-sky-400">
@@ -187,21 +285,43 @@ export function CardDetailView({ cardUuid }: CardDetailViewProps) {
               <p className="mt-4 text-3xl font-semibold text-sky-300">
                 {formatCurrency(detail?.raw?.median)}
               </p>
-              {detail?.raw ? (
-                <>
-                  {/* sampleSize first: it's the count behind the FMV. compTotal only counts
-                      confirmed-raw rows among the loaded sales — a floor, for point-less cards. */}
-                  <PriceConfidenceBadge
-                    sampleSize={detail.raw.sampleSize || detail.raw.compTotal}
-                    lowConfidence={detail.raw.lowConfidence}
-                  />
-                  <LiquidityPace
-                    liquidity={detail.raw.liquidity}
-                    glossary={market.glossary}
-                    className="mt-1 block text-xs text-slate-400"
-                  />
-                </>
-              ) : null}
+              {/* A FIXED slot for what qualifies the price, whether or not there is anything to
+                  put in it. Its contents have three natural heights — badge + pace, badge alone
+                  (no liquidity in the response), or nothing at all for a printing with no raw
+                  sales — so leaving it to the content meant every step along the rail shoved the
+                  rail, the tabs and the panel up or down by up to 44px. `min-h` rather than `h`:
+                  it reserves the tall case without clipping if a pace line wraps on a narrow
+                  screen.
+
+                  48px is the tall case measured from its own type: the badge row is a 10px label
+                  at the inherited 1.5 line-height (15) + py-0.5 (4) + its border (2) = 21, under
+                  mt-1.5 (6); the pace line is text-xs (16) under mt-1 (4). 27 + 20 = 47, plus a
+                  pixel of slack. */}
+              <div className="min-h-12">
+                {detail?.raw ? (
+                  <>
+                    {/* sampleSize first: it's the count behind the FMV. compTotal only counts
+                        confirmed-raw rows among the loaded sales — a floor, for point-less cards. */}
+                    <PriceConfidenceBadge
+                      sampleSize={detail.raw.sampleSize || detail.raw.compTotal}
+                      lowConfidence={detail.raw.lowConfidence}
+                    />
+                    <LiquidityPace
+                      liquidity={detail.raw.liquidity}
+                      glossary={market.glossary}
+                      className="mt-1 block text-xs text-slate-400"
+                    />
+                  </>
+                ) : (
+                  // The dash above says a number is missing; this says which number and why, so
+                  // the reserved space carries an answer instead of reading as a rendering gap.
+                  // "Raw" specifically: a printing with no raw sales can still have graded ones,
+                  // which the Pricing tab lists.
+                  <p className="mt-1.5 text-xs text-slate-500">
+                    No raw sales recorded for this printing.
+                  </p>
+                )}
+              </div>
             </>
           ) : null}
         </div>
@@ -213,16 +333,32 @@ export function CardDetailView({ cardUuid }: CardDetailViewProps) {
         </div>
       ) : null}
 
-      {detail && detail.parallels.length > 0 ? (
-        <RainbowStrip
-          currentFinish={market?.finish ?? null}
-          currentFmv={detail.raw?.median ?? null}
-          currentOwned={ownedCount}
-          parallels={detail.parallels}
-        />
-      ) : null}
+      {/* One printing is not a rainbow — the rail only earns its space when there's a choice.
+          It renders from the LAST loaded detail during a swap and is not dimmed with the rest:
+          it's the one thing on the page that must stay solid to step along.
+
+          While the card is still loading the rail's space is held by a skeleton of the same
+          height, so the tabs below don't get shoved down the moment the rainbow arrives. The one
+          case that still moves is a card with a single printing, where the held space collapses
+          once — rare enough to be worth the common case staying still. */}
+      {detail ? (
+        detail.printings.length > 1 ? (
+          <PrintingStrip
+            printings={detail.printings}
+            activeUuid={activeUuid}
+            onPick={pickPrinting}
+          />
+        ) : null
+      ) : (
+        <PrintingRailSkeleton />
+      )}
 
       {detail ? (
+        <div
+          className={`transition-opacity duration-200 ${
+            swapping ? "opacity-40" : "opacity-100"
+          }`}
+        >
         <FolderTabs
           ariaLabel="Card details"
           tabs={[
@@ -234,6 +370,16 @@ export function CardDetailView({ cardUuid }: CardDetailViewProps) {
           ]}
           value={folder}
           onChange={setFolder}
+          /* One height for every tab, and its own scroll inside.
+             These five tabs answer the same question at wildly different sizes — "You don't own
+             this printing" is one line, a sales list is a hundred rows — so a panel sized to its
+             contents jumped from 40px to 3000px on a click, and reading down the tab strip made
+             the page pump. A fixed box means the tabs, the rail and the header never move and the
+             tab strip stays on screen while a long list scrolls.
+             24rem is the tallest DESIGNED content — the 240px history chart plus its date/grade
+             row — with padding and a little slack. Tables longer than that scroll; nothing else
+             has to. */
+          bodyClassName="h-96 overflow-y-auto"
         >
           {folder === "copies" ? (
             detail.ownedCopies.length ? (
@@ -347,9 +493,9 @@ export function CardDetailView({ cardUuid }: CardDetailViewProps) {
                 ) : null}
               </div>
               <div className={`mt-4 transition-opacity ${sliceLoading ? "opacity-50" : ""}`}>
-                <CardPriceChart
+                <PriceHistoryChart
                   points={priceHistory?.points ?? []}
-                  gradeKey={gradeKey}
+                  label={`FMV (${gradeKey})`}
                   startDate={priceHistory?.start_date}
                   endDate={priceHistory?.end_date}
                 />
@@ -434,6 +580,7 @@ export function CardDetailView({ cardUuid }: CardDetailViewProps) {
 
           {folder === "grade" ? <GradingDeskPanel cardUuid={cardUuid} /> : null}
         </FolderTabs>
+        </div>
       ) : null}
 
     </div>
@@ -491,106 +638,3 @@ function PricingRow({
   );
 }
 
-/**
- * The whole rainbow on one quiet rail, the printing you're on included and highlighted.
- *
- * A rainbow can run 16 printings deep, so the strip has to stay calm at that size: one
- * horizontally-scrolling row of identical cells rather than three wrapped rows of ragged chips.
- * Every cell is the same width, the same two lines (name, then run · price in one muted tone),
- * and ownership is a small emerald dot instead of a badge — so sixteen variants read as one row
- * of options, not sixteen competing labels. Click a cell and this same page re-anchors on that
- * printing.
- */
-function RainbowCell({
-  name,
-  printRun,
-  fmv,
-  owned,
-  active = false,
-}: {
-  name: string;
-  printRun?: number | null;
-  fmv: string | null;
-  owned: number;
-  active?: boolean;
-}) {
-  const meta = [printRun ? `/${printRun}` : null, fmv ? formatCurrency(fmv) : null]
-    .filter(Boolean)
-    .join(" · ");
-
-  return (
-    <span
-      className={`flex w-36 shrink-0 flex-col rounded-lg px-3 py-2 transition ${
-        active
-          ? "bg-slate-800/80 ring-1 ring-sky-400/40"
-          : "bg-slate-900/40 group-hover:bg-slate-800/60"
-      }`}
-    >
-      <span className="flex items-center gap-1.5">
-        <span
-          className={`truncate text-sm font-medium ${active ? "text-white" : "text-slate-200"}`}
-        >
-          {name}
-        </span>
-        {owned > 0 ? (
-          <span
-            className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400"
-            title={`You own ${owned}`}
-          />
-        ) : null}
-      </span>
-      <span className="mt-0.5 truncate text-xs text-slate-500">{meta || "—"}</span>
-    </span>
-  );
-}
-
-function RainbowStrip({
-  currentFinish,
-  currentFmv,
-  currentOwned,
-  parallels,
-}: {
-  currentFinish: string | null;
-  currentFmv: string | null;
-  currentOwned: number;
-  parallels: CardDetailResult["parallels"];
-}) {
-  return (
-    <section>
-      <div className="flex items-baseline justify-between">
-        <h3 className="text-xs font-medium uppercase tracking-wider text-slate-500">
-          Printings
-        </h3>
-        <span className="text-xs text-slate-600">
-          {parallels.length + 1} total
-        </span>
-      </div>
-      <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <span aria-current="true" title={currentFinish ?? "Base"}>
-          <RainbowCell
-            name={currentFinish ?? "Base"}
-            fmv={currentFmv}
-            owned={currentOwned}
-            active
-          />
-        </span>
-
-        {parallels.map(({ card, headlineFmv, ownedCount }) => (
-          <Link
-            key={card.uuid}
-            href={`/cards/${card.uuid}`}
-            className="group"
-            title={card.finish ?? "Base"}
-          >
-            <RainbowCell
-              name={card.finish ?? "Base"}
-              printRun={card.print_run}
-              fmv={headlineFmv}
-              owned={ownedCount}
-            />
-          </Link>
-        ))}
-      </div>
-    </section>
-  );
-}
