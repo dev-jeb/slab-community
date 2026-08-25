@@ -5,10 +5,7 @@ import { useCallback, useEffect, useState, useTransition } from "react";
 
 import { SetupPrompt } from "@/components/collection/SetupPrompt";
 import { PriceConfidenceBadge } from "@/components/collection/PriceConfidenceBadge";
-import {
-  PriceHistoryChart,
-  formatPriceHistoryRange,
-} from "@/components/charts/PriceHistoryChart";
+import { PriceHistoryChart } from "@/components/charts/PriceHistoryChart";
 import { FolderTabs } from "@/components/ui/FolderTabs";
 import { Sheen, SheenBar } from "@/components/ui/sheen";
 import { formatLabel, type SetDetailResult } from "@/lib/set-detail";
@@ -272,6 +269,19 @@ function SealedRail({
   );
 }
 
+/**
+ * "12 cards/pack", but "1 card/pack" — a one-card pack is a real configuration (Clear Cut ships
+ * one card in one pack in one box), and it read as "1 cards/pack · 1 packs/box".
+ */
+function countOf(
+  count: number | null | undefined,
+  unit: string,
+  per: string,
+): string | null {
+  if (!count) return null;
+  return `${count} ${unit}${count === 1 ? "" : "s"}/${per}`;
+}
+
 /** The picked SKU's headline, its confidence, and its series. */
 function SkuHistory({
   sku,
@@ -281,9 +291,9 @@ function SkuHistory({
   history: SealedPriceHistory | null;
 }) {
   const config = [
-    sku.cards_per_pack ? `${sku.cards_per_pack} cards/pack` : null,
-    sku.packs_per_box ? `${sku.packs_per_box} packs/box` : null,
-    sku.boxes_per_case ? `${sku.boxes_per_case} boxes/case` : null,
+    countOf(sku.cards_per_pack, "card", "pack"),
+    countOf(sku.packs_per_box, "pack", "box"),
+    countOf(sku.boxes_per_case, "box", "case"),
   ].filter(Boolean);
 
   return (
@@ -313,17 +323,14 @@ function SkuHistory({
       </div>
 
       {history ? (
-        <>
-          <PriceHistoryChart
-            points={history.points}
-            label={`${formatLabel(sku.format)} price`}
-            startDate={history.start_date}
-            endDate={history.end_date}
-          />
-          <p className="mt-2 text-xs text-[var(--text-dim)]">
-            {formatPriceHistoryRange(history.start_date, history.end_date) ?? ""}
-          </p>
-        </>
+        // The chart prints its own date range and latest price; adding them here again is how the
+        // footer ended up saying "Aug 19, 2026 – Aug 24, 2026" twice.
+        <PriceHistoryChart
+          points={history.points}
+          label={`${formatLabel(sku.format)} price`}
+          startDate={history.start_date}
+          endDate={history.end_date}
+        />
       ) : (
         <Sheen loading label="Loading price history">
           <SheenBar className="h-[210px] w-full rounded-xl" />
