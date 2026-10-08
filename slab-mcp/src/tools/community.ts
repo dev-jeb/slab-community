@@ -5,6 +5,14 @@ import { glossaryLines, join, metric, money, text } from '../format.js';
 import type { MetricInfo } from '../format.js';
 import { READ_ONLY, defineTool } from './types.js';
 
+/** What slab saw sell over one window — the API's one shape for real-sales counts + dollars. */
+interface ObservedSales {
+  window_days: number;
+  sales: number;
+  dollars: string;
+  cards?: number | null;
+}
+
 interface CommunityBoard {
   stats?: Record<string, unknown>;
   ticker?: string[];
@@ -22,6 +30,8 @@ interface CommunityBoard {
 function leaderboardLine(row: Record<string, unknown>): string {
   const card = (row.card ?? row) as Record<string, unknown>;
   const outer = row as Record<string, unknown>;
+  const seen = outer.observed as ObservedSales | undefined;
+  const prior = outer.observed_prior as ObservedSales | undefined;
 
   return (
     '  ' +
@@ -35,12 +45,14 @@ function leaderboardLine(row: Record<string, unknown>): string {
       (card.finish as string) ?? undefined,
       card.print_run ? `/${card.print_run}` : undefined,
       card.fair_market_value != null ? money(card.fair_market_value as number) : undefined,
-      // Player-leaderboard measures. These come from counting real sales in a
-      // window — the comps lane — so they ARE market activity, unlike an
-      // appraisal difference.
-      outer.sales_30d != null ? `${outer.sales_30d} sales/30d (prev ${outer.sales_prev_30d ?? '?'})` : undefined,
-      outer.dollar_volume_30d != null ? `volume ${money(outer.dollar_volume_30d as string)}` : undefined,
-      outer.distinct_cards_30d != null ? `${outer.distinct_cards_30d} distinct cards` : undefined,
+      // Player-leaderboard measures: the `observed` block (glossary
+      // `sales.observed`). They come from counting real sales in a window — the
+      // comps lane — so they ARE market activity, unlike an appraisal
+      // difference; but only the sales slab SAW, so they read "seen", never
+      // "volume" (a missed sale is simply absent).
+      seen ? `${seen.sales} sales seen/${seen.window_days}d (prev ${prior?.sales ?? '?'})` : undefined,
+      seen ? `${money(seen.dollars)} seen` : undefined,
+      seen?.cards != null ? `${seen.cards} distinct cards` : undefined,
       outer.price_trend_pct != null ? `trend ${outer.price_trend_pct}%` : undefined,
       outer.collector_count != null ? `${outer.collector_count} collectors` : undefined,
       outer.owner_count != null ? `${outer.owner_count} owners` : undefined,
@@ -63,7 +75,8 @@ export const getCommunity = defineTool({
     "The response embeds slab's glossary entry for each leaderboard — use that wording when you " +
     'explain a board rather than inferring what it measures from its name, and call explain_metrics ' +
     'for anything the embedded set does not cover. "Hottest" in particular is computed from real ' +
-    'sales in a window, which is not the same thing as an appraisal moving.',
+    'sales in a window, which is not the same thing as an appraisal moving — and those counts and ' +
+    'dollars are the sales slab saw (sales.observed), never every sale made: say "seen", not "volume".',
   inputSchema: z.object({
     limit: z.number().int().min(1).max(50).optional().describe('Rows per leaderboard. Default 10.'),
     boards: z
