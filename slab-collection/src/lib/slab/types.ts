@@ -280,7 +280,7 @@ export interface SealedPriceHistory {
  * A sealed SKU's market: its snapshot price points and the sales behind them.
  *
  * Sealed has no grade or finish axis — v1 prices factory-sealed only — so a comp here carries a
- * date, a price, a marketplace and its listing title, and nothing about condition.
+ * date, a price, a sale type and its listing title, and nothing about condition.
  */
 export interface SealedMarket {
   product: SealedProductOut;
@@ -406,7 +406,6 @@ export interface CompOut {
   grade_key?: string | null;
   grade?: string | null;
   finish?: string | null;
-  marketplace: string;
   sale_type?: string | null;
   title: string;
   match_status: string;

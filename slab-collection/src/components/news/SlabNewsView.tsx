@@ -118,7 +118,7 @@ function CompAlertRow({ alert }: { alert: CompAlert }) {
             {formatCurrency(alert.latestComp.sale_price)}
           </p>
           <p className="mt-1 text-sm text-slate-400">
-            {formatSoldDate(alert.latestComp.sold_date)} · {alert.latestComp.marketplace}
+            {formatSoldDate(alert.latestComp.sold_date)}
           </p>
           <p className="mt-1 text-xs text-slate-500">
             Comps {alert.previousTotal} → {alert.currentTotal}

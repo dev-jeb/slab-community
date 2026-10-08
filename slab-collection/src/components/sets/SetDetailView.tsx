@@ -344,7 +344,7 @@ function SkuHistory({
  * The sales behind a sealed price — the same receipts the card page shows under Sales.
  *
  * A sealed FMV is a trimmed median of these, and a box price is the number people are most likely
- * to argue with, so the individual sales have to be readable: date, price, marketplace, and the
+ * to argue with, so the individual sales have to be readable: date, price, sale type, and the
  * listing title it was matched from. The title is what lets someone catch a bad match themselves
  * rather than take the median on faith.
  */
@@ -367,8 +367,7 @@ function SealedSales({
   if (!market.comps.length) {
     return (
       <EmptyNote>
-        No recorded sales for this {formatLabel(sku.format).toLowerCase()} yet. Sealed sales are
-        harvested per SKU, so a format can be catalogued before anything of it has sold.
+        No recorded sales for this {formatLabel(sku.format).toLowerCase()} yet.
       </EmptyNote>
     );
   }
@@ -385,7 +384,6 @@ function SealedSales({
             <tr>
               <th className="px-3 py-2 font-medium">Date</th>
               <th className="px-3 py-2 font-medium">Price</th>
-              <th className="px-3 py-2 font-medium">Marketplace</th>
               <th className="px-3 py-2 font-medium">Sale type</th>
               <th className="px-3 py-2 font-medium">Listing</th>
             </tr>
@@ -397,7 +395,6 @@ function SealedSales({
                 <td className="px-3 py-2 font-mono tabular-nums text-white">
                   {formatCurrency(comp.sale_price)}
                 </td>
-                <td className="px-3 py-2 text-slate-400">{comp.marketplace}</td>
                 <td className="px-3 py-2 text-slate-400">
                   {comp.sale_type ? comp.sale_type.replace(/_/g, " ") : "—"}
                 </td>

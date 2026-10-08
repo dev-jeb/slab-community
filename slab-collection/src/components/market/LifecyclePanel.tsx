@@ -223,7 +223,7 @@ function LoadingBenchmark() {
  * Which build you're looking at.
  *
  * The curve is frozen between builds and revisions are meant to be visible rather than silent —
- * comps harvesting backfills old sales, so two builds honestly differ. Quoting the build id
+ * older sales keep arriving after the fact, so two builds honestly differ. Quoting the build id
  * alongside a number is what makes that number reproducible later.
  */
 function BuildLine({ curve }: { curve: LifecycleCurve }) {

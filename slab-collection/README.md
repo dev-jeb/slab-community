@@ -158,7 +158,7 @@ Search-engine style player research — find every catalog variant and compare p
 - Search by player name; optional filters for card name, autos, rookies, numbered
 - **Per variant:** FMV (median), comp average, purchase range, comp sales range, comp count
 - **Graded pricing** table (PSA-10, BGS-9.5, etc.)
-- Expandable **recent comps** (date, price, marketplace, listing title)
+- Expandable **recent comps** (date, price, sale type, listing title)
 - **Sort** by price (high/low), best confidence, or by set — unpriced variants always sink to the bottom
 
 ### Card detail (`/cards/[uuid]`)

@@ -540,7 +540,6 @@ export function CardDetailView({ cardUuid }: CardDetailViewProps) {
                         <th className="px-3 py-2 font-medium">Date</th>
                         <th className="px-3 py-2 font-medium">Price</th>
                         <th className="px-3 py-2 font-medium">Grade</th>
-                        <th className="px-3 py-2 font-medium">Marketplace</th>
                         <th className="px-3 py-2 font-medium">Listing</th>
                       </tr>
                     </thead>
@@ -563,9 +562,6 @@ export function CardDetailView({ cardUuid }: CardDetailViewProps) {
                                 ?
                               </span>
                             ) : null}
-                          </td>
-                          <td className="px-3 py-2 text-slate-400">
-                            {comp.marketplace}
                           </td>
                           <td className="max-w-xs truncate px-3 py-2 text-slate-500">
                             {comp.title}
