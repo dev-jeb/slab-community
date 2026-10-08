@@ -15,8 +15,9 @@ interface ObservedSales {
 
 /**
  * Sales velocity (glossary `sales.velocity`): the sales slab saw in 30 days
- * against the 30 before, both windows ending `lag_days` back. Written the way
- * every slab client writes it — the ratio, then both counts: "2× (2 → 4)".
+ * against the 30 before, both windows ending `lag_days` back. Read the way
+ * every slab client reads it — hot, warm or cold (served), then the ratio and
+ * both counts: "hot 2× (2 → 4)".
  */
 interface SalesVelocity {
   window_days: number;
@@ -25,14 +26,17 @@ interface SalesVelocity {
   sales: number;
   sales_prior: number;
   ratio?: number | null;
+  heat?: 'hot' | 'warm' | 'cold' | null;
   label?: string | null;
 }
 
 function velocityText(v: SalesVelocity): string {
   const r = v.ratio;
   const ratio = r == null ? undefined : `${Number(r.toFixed(r >= 10 ? 0 : r >= 1 ? 1 : 2))}×`;
-  const lead = ratio ?? (v.label === 'new' ? 'new' : undefined);
-  return join(' ', 'velocity', lead, `(${v.sales_prior} → ${v.sales})`);
+  // An API older than `heat` names the same reading in `label`.
+  const heat =
+    v.heat ?? (v.label === 'up' || v.label === 'new' ? 'hot' : v.label === 'steady' ? 'warm' : 'cold');
+  return join(' ', 'velocity', heat, ratio, `(${v.sales_prior} → ${v.sales})`);
 }
 
 interface CommunityBoard {
