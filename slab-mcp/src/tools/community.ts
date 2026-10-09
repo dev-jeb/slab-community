@@ -13,32 +13,6 @@ interface ObservedSales {
   cards?: number | null;
 }
 
-/**
- * Sales velocity (glossary `sales.velocity`): the sales slab saw in 30 days
- * against the 30 before, both windows ending `lag_days` back. Read the way
- * every slab client reads it — hot, warm or cold (served), then the ratio and
- * both counts: "hot 2× (2 → 4)".
- */
-interface SalesVelocity {
-  window_days: number;
-  lag_days: number;
-  through: string;
-  sales: number;
-  sales_prior: number;
-  ratio?: number | null;
-  heat?: 'hot' | 'warm' | 'cold' | null;
-  label?: string | null;
-}
-
-function velocityText(v: SalesVelocity): string {
-  const r = v.ratio;
-  const ratio = r == null ? undefined : `${Number(r.toFixed(r >= 10 ? 0 : r >= 1 ? 1 : 2))}×`;
-  // An API older than `heat` names the same reading in `label`.
-  const heat =
-    v.heat ?? (v.label === 'up' || v.label === 'new' ? 'hot' : v.label === 'steady' ? 'warm' : 'cold');
-  return join(' ', 'velocity', heat, ratio, `(${v.sales_prior} → ${v.sales})`);
-}
-
 interface CommunityBoard {
   stats?: Record<string, unknown>;
   ticker?: string[];
@@ -57,8 +31,6 @@ function leaderboardLine(row: Record<string, unknown>): string {
   const card = (row.card ?? row) as Record<string, unknown>;
   const outer = row as Record<string, unknown>;
   const seen = outer.observed as ObservedSales | undefined;
-  const prior = outer.observed_prior as ObservedSales | undefined;
-  const velocity = outer.velocity as SalesVelocity | null | undefined;
 
   return (
     '  ' +
@@ -77,11 +49,9 @@ function leaderboardLine(row: Record<string, unknown>): string {
       // comps lane — so they ARE market activity, unlike an appraisal
       // difference; but only the sales slab SAW, so they read "seen", never
       // "volume" (a missed sale is simply absent).
-      seen ? `${seen.sales} sales seen/${seen.window_days}d (prev ${prior?.sales ?? '?'})` : undefined,
+      seen ? `${seen.sales} sales seen/${seen.window_days}d` : undefined,
       seen ? `${money(seen.dollars)} seen` : undefined,
       seen?.cards != null ? `${seen.cards} distinct cards` : undefined,
-      // Sales velocity, served (its label too): the windows end a week back.
-      velocity ? velocityText(velocity) : undefined,
       outer.price_trend_pct != null ? `trend ${outer.price_trend_pct}%` : undefined,
       outer.collector_count != null ? `${outer.collector_count} collectors` : undefined,
       outer.owner_count != null ? `${outer.owner_count} owners` : undefined,
