@@ -8,6 +8,7 @@ service. What lives here is the stuff people build *against* it — front ends, 
 integrations — released openly so nobody has to write the same wrapper twice.
 
 If you're looking for the API itself: [`api.slab.dev-jeb.com/docs`](https://api.slab.dev-jeb.com/docs).
+The collection site, where collectors keep their hockey cards: [collection.slab.dev-jeb.com](https://collection.slab.dev-jeb.com).
 
 ## The one rule: one directory, one self-contained tool
 
