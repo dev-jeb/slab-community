@@ -14,12 +14,13 @@ import { z } from 'zod';
 import { join, money, text } from '../format.js';
 import { READ_ONLY, defineTool } from './types.js';
 
+/** One sale as `GET /cards/{uuid}/comps` serves it: what slab matched, never the seller's words. */
 interface CompRow {
-  sold_date?: string;
-  price?: number;
-  title?: string;
+  sold_date?: string | null;
+  sale_price?: number | string | null;
   grade_key?: string | null;
-  source?: string | null;
+  sale_type?: string | null;
+  serial_number?: number | null;
 }
 
 interface MarketOut {
@@ -99,13 +100,15 @@ export const getCardPricing = defineTool({
     }
 
     if (includeComps) {
-      const comps = await ctx.client.request<{ comps?: CompRow[] }>('GET', `/cards/${card_uuid}/comps`, {
+      const comps = await ctx.client.request<{ comps?: CompRow[]; total?: number }>('GET', `/cards/${card_uuid}/comps`, {
         query: { limit: compsLimit, grade_key: input.grade_key },
       });
       const rows = comps.comps ?? [];
-      lines.push('', `Recent sales (${rows.length}) — these are the actual transactions; count these for "what happened in a window":`);
+      const of = comps.total != null && comps.total > rows.length ? ` of ${comps.total}` : '';
+      lines.push('', `Recent sales (${rows.length}${of}) — these are the actual transactions; count these for "what happened in a window":`);
       for (const comp of rows) {
-        lines.push('  ' + join('  |  ', comp.sold_date, money(comp.price), comp.grade_key ?? 'RAW', comp.title));
+        lines.push('  ' + join('  |  ', comp.sold_date, money(comp.sale_price), comp.grade_key ?? 'RAW',
+          comp.sale_type, comp.serial_number ? `#${comp.serial_number}` : undefined));
       }
       if (!rows.length) lines.push('  (none)');
     }
